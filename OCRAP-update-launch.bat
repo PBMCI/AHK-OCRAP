@@ -311,7 +311,7 @@ if "%installedlauncher%" EQU "%launcherversion%" (
     :: if versions are the same, run the local script, you're done!
     echo Launcher up to date.
     :: Copy the contents of temp_meta_file to local_meta_file, then delete the temp
-    copy /y "%temp_meta_file%" "%local_meta_file%"
+    copy /y "%temp_meta_file%" "%local_meta_file%" >nul
     del "%temp_meta_file%"
     echo all done!
     timeout /t 10
@@ -345,6 +345,7 @@ echo Launcher updated
 echo.
 :: Copy the contents of temp_meta_file to local_meta_file, overwriting it
 copy /y "%temp_meta_file%" "%local_meta_file%" >nul
+del "%temp_meta_file%"
 echo all done!
 timeout /t 10
 exit /b 1
