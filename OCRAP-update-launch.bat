@@ -175,13 +175,6 @@ if not errorlevel 1 (
 echo.
 echo Success. You are now on the latest version.
 
-:: Check if the copy was successful
-if %errorlevel% equ 0 (
-) else (
-    echo.
-    echo Error updating local metadata file.
-)
-
 :: in any case, start the script
 :LaunchScript
 :: Check if AutoHotkey is installed - need to verify path
@@ -319,7 +312,8 @@ if "%installedlauncher%" EQU "%launcherversion%" (
     :: Copy the contents of temp_meta_file to local_meta_file, then delete the temp
     copy /y "%temp_meta_file%" "%local_meta_file%"
     del "%temp_meta_file%"
-    pause
+    echo all done!
+    timeout /t 10
     exit /b 1
 )
 :downloadLauncher
