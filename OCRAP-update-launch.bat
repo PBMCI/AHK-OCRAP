@@ -9,7 +9,7 @@ echo.
 set "repo_base_url=https://raw.githubusercontent.com/PBMCI/AHK-OCRAP/main"
 set "script_url=%repo_base_url%/Oracle_Cerner_Repository_for_Automating_Pharmacy-VA.ahk"
 set "meta_url=%repo_base_url%/ocrap_meta.xml"
-set "icon_url=%repo_base_url%/ocrap.ico"
+set "icon_url=%repo_base_url%/images/ocrap.ico"
 set "launcher_url=%repo_base_url%/OCRAP-update-launch.bat"
 
 :: Define the local path where the meta file is
@@ -20,7 +20,7 @@ set "temp_meta_file=%target_directory%\temp_meta.xml"
 set "icon_file=%target_directory%\ocrap.ico"
 set "launcher_file=%target_directory%\OCRAP-update-launch.bat"
 set "startup_folder=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
-set "desktop_folder=%USERPROFILE%\Desktop"
+for /f "delims=" %%i in ('powershell -C "[Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)"') do set "desktop_folder=%%i"
 
 :: Reset errorlevel to 0
 set errorlevel=0
@@ -49,9 +49,7 @@ goto Pass1
 echo Downloading OCRAP-VA.ahk
 curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
     echo Error downloading ahk file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
+    goto errorHalt
 )
 
 :: Reset errorlevel to 0
@@ -63,17 +61,13 @@ echo.
 type "%local_script_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading ahk script file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
+    goto errorHalt
 )
 
 echo Downloading ocrap_meta.xml
 curl -o "%local_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
     echo Error downloading meta file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
+    goto errorHalt
 )
 
 :: Reset errorlevel to 0
@@ -102,7 +96,7 @@ echo The launcher is comparing your local version against the latest build.
 echo Downloading build info...
 curl -o "%temp_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
     echo Error downloading Meta file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
+    echo Please report this issue to Ronald.Major@va.gov
     pause
     goto retryPrompt
 )
@@ -146,10 +140,9 @@ if "%installedversion%" EQU "%buildversion%" (
 echo The local version is different from the build version. The latest build will now be downloaded.
 curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
     echo Error downloading ahk file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
+    echo Please report this issue to Ronald.Major@va.gov
     echo.
     echo Attempting to start the old version of OCRAP-VA.ahk
-    pause
     goto LaunchScript
 )
 
@@ -160,9 +153,7 @@ set errorlevel=0
 type "%local_script_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading script file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
+    goto errorHalt
 )
 
 echo.
@@ -206,7 +197,6 @@ if not exist "%ahk_exe_path%" (
         echo Invalid choice.
         echo Please enter any of Y, N, y, n.
         goto retryPrompt
-        pause
     )
 )
 
@@ -216,7 +206,6 @@ start "" "%local_script_file%"
 if %errorlevel% equ 0 (
     echo OCRAP-VA.ahk has Launched.
     echo.
-    timeout /t 5
 ) else (
     echo Launch Attempted despite some errors.
     echo Check your windows taskbar tray to confirm whether the ahk script is running.
@@ -224,97 +213,98 @@ if %errorlevel% equ 0 (
     echo.
     pause
 )
-
 :: If no shortcuts found, prompt for creation
 set "shortcut_name=OCRAP-VA"
-if not exist "%startup_folder%\%shortcut_name%.lnk" && not exist "%desktop_folder%\%shortcut_name%.lnk" (
-    
-echo It looks like you don't have any shortcuts created
-echo We recommend adding a shortcut to startup so the script starts when you log on. 
-echo Which shortcut(s) would you like?
-echo.
-:shortcutOptions
-echo D=Desktop
-echo S=Startup
-echo B=Both Desktop and Startup
-echo N=None
+if not exist "%startup_folder%\%shortcut_name%.lnk" (
+
+    If not exist "%desktop_folder%\%shortcut_name%.lnk" (   
+    echo It looks like you don't have any shortcuts created
+    echo We recommend adding a shortcut to startup so the script starts when you log on. 
+    echo Which shortcuts would you like?
+    echo.
+    :shortcutOptions
+    echo D=Desktop
+    echo S=Startup
+    echo B=Both Desktop and Startup
+    echo N=None
     set "user_choice_shortcut="
     set /p "user_choice_shortcut=Please select from the above options: "
 :: Check the user's choice and determine the next action
-    
-    
-    
     if /i "!user_choice_shortcut!"=="N" (
         echo.
         echo All Done!
         timeout /t 3
         exit /b 1
-    ) 
-    
-curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
-    echo Error downloading icon file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
-)
-
-:: Reset errorlevel to 0
-set errorlevel=0
-
-echo.
-
-:: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
-type "%icon_file%" | findstr /C:"404: Not Found" >nul
-if not errorlevel 1 (
-    echo 404 Error occurred while downloading icon file!
-    echo Please report this issue to Ronald.Major@va.gov
-    pause
-    exit /b 1
-)
-    
-    if /i "!user_choice_shortcut!"=="D" (
+    ) else if /i "!user_choice_shortcut!"=="D" (
         echo Creating shortcut on the desktop...
-        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
-        echo objShortCut = objShell.CreateShortcut("%desktop_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
-        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
-        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
-        echo objShortCut.Save >> CreateShortcut.vbs
-        cscript CreateShortcut.vbs
-        del CreateShortcut.vbs
+
+        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
+            echo Error downloading icon file!
+            goto errorHalt
+        )
+        :: Reset errorlevel to 0
+        set errorlevel=0
+        echo icon downloaded
+
+        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+        type "%icon_file%" | findstr /C:"404: Not Found" >nul
+        if not errorlevel 1 (
+            echo 404 Error occurred while downloading icon file!
+            goto errorHalt
+        )
+
+        :: Create a shortcut on the desktop using PowerShell
+        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+
         echo Shortcut created on the desktop.
 
     ) else if /i "!user_choice_shortcut!"=="S" (
         echo Creating shortcut in the startup folder...
-        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
-        echo objShell.SpecialFolders("AllUsersDesktop") = "%desktop_folder%" >> CreateShortcut.vbs
-        echo Set objShortCut = objShell.CreateShortcut("%startup_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
-        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
-        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
-        echo objShortCut.Save >> CreateShortcut.vbs
-        cscript CreateShortcut.vbs
-        del CreateShortcut.vbs
-        echo Shortcut created in the startup folder.
+
+        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
+            echo Error downloading icon file!
+            goto errorHalt
+        )
+
+        :: Reset errorlevel to 0
+        set errorlevel=0
+        echo.
+        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+        type "%icon_file%" | findstr /C:"404: Not Found" >nul
+        if not errorlevel 1 (
+            echo 404 Error occurred while downloading icon file!
+            goto errorHalt
+        )
+
+        :: Create a shortcut using PowerShell
+        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+
+        echo Shortcut created in startup.
 
     ) else if /i "!user_choice_shortcut!"=="B" (
-         echo Creating shortcut in the startup folder...
-        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
-        echo objShell.SpecialFolders("AllUsersDesktop") = "%desktop_folder%" >> CreateShortcut.vbs
-        echo Set objShortCut = objShell.CreateShortcut("%startup_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
-        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
-        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
-        echo objShortCut.Save >> CreateShortcut.vbs
-        cscript CreateShortcut.vbs
-        del CreateShortcut.vbs
-        echo Shortcut created in the startup folder.
 
-        echo Creating shortcut on the desktop...
-        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
-        echo objShortCut = objShell.CreateShortcut("%desktop_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
-        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
-        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
-        echo objShortCut.Save >> CreateShortcut.vbs
-        cscript CreateShortcut.vbs
-        del CreateShortcut.vbs
+        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
+            echo Error downloading icon file! 
+            goto errorHalt
+        )
+        :: Reset errorlevel to 0
+        set errorlevel=0
+        echo.
+        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+        type "%icon_file%" | findstr /C:"404: Not Found" >nul
+        if not errorlevel 1 (
+            echo 404 Error occurred while downloading icon file!
+            goto errorHalt
+        )
+
+        :: Create a shortcut using PowerShell
+        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+
+        echo Shortcut created in startup.
+
+        :: Create a shortcut on the desktop using PowerShell
+        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+
         echo Shortcut created on the desktop.
 
     ) else (
@@ -322,6 +312,7 @@ if not errorlevel 1 (
         goto shortcutOptions
     )
 
+)
 )
 
 set "launcherversion="
@@ -346,26 +337,21 @@ if "%installedlauncher%" EQU "%launcherversion%" (
     :: if versions are the same, run the local script, you're done!
     echo Launcher up to date.
     del "%temp_meta_file%"
-    exit /b 1
     pause
+    exit /b 1
 )
 
 curl -o "%launcher_file%" "%launcher_url%" --ssl-no-revoke -s || (
     echo Error downloading icon file!
-    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
-    pause
-    exit /b 1
+    goto errorHalt
 )
 
 :: Reset errorlevel to 0
 set errorlevel=0
 echo.
-
 :: Check the content of the downloaded file for "404: Not Found" - github download issue fix
-:: Use "findstr" to check if the file contains "404: Not Found" at all
 type "%launcher_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
-    :: Use "for /f" to check if "404: Not Found" is the first line
     for /f "usebackq delims=" %%a in ("%launcher_file%") do (
         set "first_line=%%a"
         goto :check_first_line
@@ -374,9 +360,7 @@ if not errorlevel 1 (
     :check_first_line
     if "!first_line!"=="404: Not Found" (
         echo 404 Error occurred while downloading icon file!
-        echo Please report this issue to Ronald.Major@va.gov
-        pause
-        exit /b 1
+        goto errorHalt
     )
 )
 
@@ -385,3 +369,8 @@ echo.
 echo all done!
 timeout /t 10
 exit /b 1
+
+:errorHalt
+echo Please report this issue to Ronald.Major@va.gov
+        pause
+        exit /b 1
