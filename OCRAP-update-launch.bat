@@ -1,4 +1,5 @@
 @echo off
+::v2023-10-6
 setlocal enableextensions enabledelayedexpansion
 
 echo OCRAP-VA auto updating launcher
