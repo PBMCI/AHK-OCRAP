@@ -33,6 +33,21 @@ if not exist "%target_directory%" (
     echo.
 )
 
+If not exist "%icon_file%" (
+    curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
+            echo Error downloading icon file! 
+            goto errorHalt
+        )
+        :: Reset errorlevel to 0
+        set errorlevel=0
+        echo.
+        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+        type "%icon_file%" | findstr /C:"404: Not Found" >nul
+        if not errorlevel 1 (
+            echo 404 Error occurred while downloading icon file!
+        )
+)
+
 :: Check if the script file and meta file exist locally, download if not present
 if not exist "%local_meta_file%" (
     goto DownloadFiles
@@ -41,6 +56,7 @@ if not exist "%local_meta_file%" (
 if not exist "%local_script_file%" (
     goto DownloadFiles
 )
+
 
 :: If we got here naturally, skip download.
 goto Pass1
@@ -158,8 +174,6 @@ if not errorlevel 1 (
 
 echo.
 echo Success. You are now on the latest version.
-:: Copy the contents of temp_meta_file to local_meta_file, overwriting it
-copy /y "%temp_meta_file%" "%local_meta_file%"
 
 :: Check if the copy was successful
 if %errorlevel% equ 0 (
@@ -232,81 +246,42 @@ if not exist "%startup_folder%\%shortcut_name%.lnk" (
 :: Check the user's choice and determine the next action
     if /i "!user_choice_shortcut!"=="N" (
         echo.
-        echo All Done!
+        echo Exiting Launcher
         timeout /t 3
         exit /b 1
     ) else if /i "!user_choice_shortcut!"=="D" (
-        echo Creating shortcut on the desktop...
-
-        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
-            echo Error downloading icon file!
-            goto errorHalt
+        If exist "%icon_file%" (
+            echo Creating shortcut on the desktop...
+            :: Create a shortcut on the desktop using PowerShell
+            powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+            echo Shortcut created on the desktop.
+        ) else (
+            echo Shortcut creation failed - no icon file
         )
-        :: Reset errorlevel to 0
-        set errorlevel=0
-        echo icon downloaded
-
-        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
-        type "%icon_file%" | findstr /C:"404: Not Found" >nul
-        if not errorlevel 1 (
-            echo 404 Error occurred while downloading icon file!
-            goto errorHalt
-        )
-
-        :: Create a shortcut on the desktop using PowerShell
-        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
-
-        echo Shortcut created on the desktop.
 
     ) else if /i "!user_choice_shortcut!"=="S" (
         echo Creating shortcut in the startup folder...
 
-        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
-            echo Error downloading icon file!
-            goto errorHalt
+        If exist "%icon_file%" (
+            :: Create a shortcut using PowerShell
+            powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+            echo Shortcut created in startup.
+        ) else (
+            echo Shortcut creation failed - no icon file
         )
-
-        :: Reset errorlevel to 0
-        set errorlevel=0
-        echo.
-        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
-        type "%icon_file%" | findstr /C:"404: Not Found" >nul
-        if not errorlevel 1 (
-            echo 404 Error occurred while downloading icon file!
-            goto errorHalt
-        )
-
-        :: Create a shortcut using PowerShell
-        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
-
-        echo Shortcut created in startup.
 
     ) else if /i "!user_choice_shortcut!"=="B" (
+        If exist "%icon_file%" (
+            :: Create a shortcut using PowerShell
+            powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+            echo Shortcut created in startup.
 
-        curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
-            echo Error downloading icon file! 
-            goto errorHalt
+            :: Create a shortcut on the desktop using PowerShell
+            powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
+            echo Shortcut created on the desktop.
+        ) else (
+            echo Shortcut creation failed - no icon file
         )
-        :: Reset errorlevel to 0
-        set errorlevel=0
-        echo.
-        :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
-        type "%icon_file%" | findstr /C:"404: Not Found" >nul
-        if not errorlevel 1 (
-            echo 404 Error occurred while downloading icon file!
-            goto errorHalt
-        )
-
-        :: Create a shortcut using PowerShell
-        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%startup_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
-
-        echo Shortcut created in startup.
-
-        :: Create a shortcut on the desktop using PowerShell
-        powershell -command "New-Object -ComObject WScript.Shell | ForEach-Object { $_.CreateShortcut('%desktop_folder%\%shortcut_name%.lnk') } | ForEach-Object { $_.TargetPath = '%launcher_file%'; $_.IconLocation = '%icon_file%'; $_.Save() }"
-
-        echo Shortcut created on the desktop.
-
     ) else (
         echo Invalid choice.
         goto shortcutOptions
@@ -314,6 +289,11 @@ if not exist "%startup_folder%\%shortcut_name%.lnk" (
 
 )
 )
+
+if not exist %launcher_file% (
+    goto downloadLauncher
+)
+
 
 set "launcherversion="
 for /f "tokens=3 delims=<>" %%a in (
@@ -336,11 +316,13 @@ echo.
 if "%installedlauncher%" EQU "%launcherversion%" (
     :: if versions are the same, run the local script, you're done!
     echo Launcher up to date.
+    :: Copy the contents of temp_meta_file to local_meta_file, then delete the temp
+    copy /y "%temp_meta_file%" "%local_meta_file%"
     del "%temp_meta_file%"
     pause
     exit /b 1
 )
-
+:downloadLauncher
 curl -o "%launcher_file%" "%launcher_url%" --ssl-no-revoke -s || (
     echo Error downloading icon file!
     goto errorHalt
@@ -366,6 +348,8 @@ if not errorlevel 1 (
 
 echo Launcher updated
 echo.
+:: Copy the contents of temp_meta_file to local_meta_file, overwriting it
+copy /y "%temp_meta_file%" "%local_meta_file%"
 echo all done!
 timeout /t 10
 exit /b 1
