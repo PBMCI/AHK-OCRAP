@@ -5,21 +5,27 @@ echo OCRAP-VA auto updating launcher
 echo This script updates and launches the Oracle Cerner Repository for Automating Pharmacy-VA (OCRAP-VA) by Lewis DeJaegher
 echo.
 
-REM Define the URL of your AutoHotkey script and xml meta files
+:: Define the URL of your AutoHotkey script and xml meta files
 set "repo_base_url=https://raw.githubusercontent.com/PBMCI/AHK-OCRAP/main"
 set "script_url=%repo_base_url%/Oracle_Cerner_Repository_for_Automating_Pharmacy-VA.ahk"
 set "meta_url=%repo_base_url%/ocrap_meta.xml"
+set "icon_url=%repo_base_url%/ocrap.ico"
+set "launcher_url=%repo_base_url%/OCRAP-update-launch.bat"
 
-REM Define the local path where the meta file is
+:: Define the local path where the meta file is
 set "target_directory=%USERPROFILE%\AppData\Roaming\OCRAP"
 set "local_meta_file=%target_directory%\ocrap_meta.xml"
 set "local_script_file=%target_directory%\ocrap-va.ahk"
 set "temp_meta_file=%target_directory%\temp_meta.xml"
+set "icon_file=%target_directory%\ocrap.ico"
+set "launcher_file=%target_directory%\OCRAP-update-launch.bat"
+set "startup_folder=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+set "desktop_folder=%USERPROFILE%\Desktop"
 
-REM Reset errorlevel to 0
+:: Reset errorlevel to 0
 set errorlevel=0
 
-REM Check if the directory exists
+:: Check if the directory exists
 if not exist "%target_directory%" (
     echo This must be new for you...
     echo Creating your OCRAP directory here: %target_directory%
@@ -27,7 +33,7 @@ if not exist "%target_directory%" (
     echo.
 )
 
-REM Check if the script file and meta file exist locally, download if not present
+:: Check if the script file and meta file exist locally, download if not present
 if not exist "%local_meta_file%" (
     goto DownloadFiles
 )
@@ -36,7 +42,7 @@ if not exist "%local_script_file%" (
     goto DownloadFiles
 )
 
-REM If we got here naturally, skip download.
+:: If we got here naturally, skip download.
 goto Pass1
 
 :DownloadFiles
@@ -48,12 +54,12 @@ curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
     exit /b 1
 )
 
-REM Reset errorlevel to 0
+:: Reset errorlevel to 0
 set errorlevel=0
 
 echo.
 
-REM Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+:: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
 type "%local_script_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading ahk script file!
@@ -70,12 +76,12 @@ curl -o "%local_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
     exit /b 1
 )
 
-REM Reset errorlevel to 0
+:: Reset errorlevel to 0
 set errorlevel=0
 
 echo.
 
-REM Check the content of the downloaded Meta file for "404: Not Found" - github download issue fix
+:: Check the content of the downloaded Meta file for "404: Not Found" - github download issue fix
 type "%local_meta_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading metadata file!
@@ -85,14 +91,14 @@ if not errorlevel 1 (
     goto retryPrompt
 )
 
-REM Other situations wouldn't apply, go straight to launch
+:: Other situations wouldn't apply, go straight to launch
 goto LaunchScript
 
 :Pass1
 
-REM If the file is found, check the current version
+:: If the file is found, check the current version
 echo The launcher is comparing your local version against the latest build.
-REM get remote version
+:: get remote version
 echo Downloading build info...
 curl -o "%temp_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
     echo Error downloading Meta file!
@@ -101,10 +107,10 @@ curl -o "%temp_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
     goto retryPrompt
 )
 
-REM Reset errorlevel to 0
+:: Reset errorlevel to 0
 set errorlevel=0
 
-REM Check the content of the downloaded Meta file for "404: Not Found" - github download issue fix
+:: Check the content of the downloaded Meta file for "404: Not Found" - github download issue fix
 type "%temp_meta_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading metadata file!
@@ -120,7 +126,7 @@ for /f "tokens=3 delims=<>" %%a in (
 
 echo The current OCRAP-VA.ahk build is %buildversion%
 
-REM get local version
+:: get local version
 set "installedversion="
 for /f "tokens=3 delims=<>" %%a in (
     'find /i "<Version>" ^< "%local_meta_file%"'
@@ -129,16 +135,14 @@ for /f "tokens=3 delims=<>" %%a in (
 echo Your local OCRAP-VA.ahk version is %installedversion%
 echo.
 
-REM compare local to remote version
+:: compare local to remote version
 
 if "%installedversion%" EQU "%buildversion%" (
-    REM if versions are the same, run the local script, you're done!
-    echo You are up to date.
-    del "%temp_meta_file%"
+    :: if versions are the same, run the local script, you're done!
     goto LaunchScript
 )
 
-REM if versions are NOT the same, download remote before running
+:: if versions are NOT the same, download remote before running
 echo The local version is different from the build version. The latest build will now be downloaded.
 curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
     echo Error downloading ahk file!
@@ -149,10 +153,10 @@ curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
     goto LaunchScript
 )
 
-REM Reset errorlevel to 0
+:: Reset errorlevel to 0
 set errorlevel=0
 
-REM Check the content of the downloaded file for "404: Not Found" - github download issue fix
+:: Check the content of the downloaded file for "404: Not Found" - github download issue fix
 type "%local_script_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
     echo 404 Error occurred while downloading script file!
@@ -163,21 +167,19 @@ if not errorlevel 1 (
 
 echo.
 echo Success. You are now on the latest version.
-REM Copy the contents of temp_meta_file to local_meta_file, overwriting it
+:: Copy the contents of temp_meta_file to local_meta_file, overwriting it
 copy /y "%temp_meta_file%" "%local_meta_file%"
 
-REM Check if the copy was successful
+:: Check if the copy was successful
 if %errorlevel% equ 0 (
-    REM Delete temp_meta_file
-    del "%temp_meta_file%"
 ) else (
     echo.
     echo Error updating local metadata file.
 )
 
-REM in any case, start the script
+:: in any case, start the script
 :LaunchScript
-REM Check if AutoHotkey is installed - need to verify path
+:: Check if AutoHotkey is installed - need to verify path
 set "ahk_exe_path=C:\Program Files\AutoHotkey\v2\AutoHotkey.exe"
 
 if not exist "%ahk_exe_path%" (
@@ -187,11 +189,11 @@ if not exist "%ahk_exe_path%" (
     echo See the related Pharmacy EHRM Community of Practice Channel thread for more info.
     echo.
 
-    REM Prompt the user for input
+    :: Prompt the user for input
 :retryPrompt
     set "user_choice="
     set /p "user_choice=Would you like to try to start the script anyways? Y or N: "
-    REM Check the user's choice and determine the next action
+    :: Check the user's choice and determine the next action
     if /i "!user_choice!"=="y" (
         echo.
         echo Attempting script start...
@@ -210,14 +212,176 @@ if not exist "%ahk_exe_path%" (
 
 start "" "%local_script_file%"
 
-REM Check if the run was successful
+:: Check if the run was successful
 if %errorlevel% equ 0 (
     echo OCRAP-VA.ahk has Launched.
     echo.
     timeout /t 5
 ) else (
-    echo Launch Attempted despite errors.
+    echo Launch Attempted despite some errors.
     echo Check your windows taskbar tray to confirm whether the ahk script is running.
+    echo if this keeps happening, report to ronald.major@va.gov
     echo.
     pause
 )
+
+:: If no shortcuts found, prompt for creation
+set "shortcut_name=OCRAP-VA"
+if not exist "%startup_folder%\%shortcut_name%.lnk" && not exist "%desktop_folder%\%shortcut_name%.lnk" (
+    
+echo It looks like you don't have any shortcuts created
+echo We recommend adding a shortcut to startup so the script starts when you log on. 
+echo Which shortcut(s) would you like?
+echo.
+:shortcutOptions
+echo D=Desktop
+echo S=Startup
+echo B=Both Desktop and Startup
+echo N=None
+    set "user_choice_shortcut="
+    set /p "user_choice_shortcut=Please select from the above options: "
+:: Check the user's choice and determine the next action
+    
+    
+    
+    if /i "!user_choice_shortcut!"=="N" (
+        echo.
+        echo All Done!
+        timeout /t 3
+        exit /b 1
+    ) 
+    
+curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
+    echo Error downloading icon file!
+    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
+    pause
+    exit /b 1
+)
+
+:: Reset errorlevel to 0
+set errorlevel=0
+
+echo.
+
+:: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
+type "%icon_file%" | findstr /C:"404: Not Found" >nul
+if not errorlevel 1 (
+    echo 404 Error occurred while downloading icon file!
+    echo Please report this issue to Ronald.Major@va.gov
+    pause
+    exit /b 1
+)
+    
+    if /i "!user_choice_shortcut!"=="D" (
+        echo Creating shortcut on the desktop...
+        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
+        echo objShortCut = objShell.CreateShortcut("%desktop_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
+        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
+        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
+        echo objShortCut.Save >> CreateShortcut.vbs
+        cscript CreateShortcut.vbs
+        del CreateShortcut.vbs
+        echo Shortcut created on the desktop.
+
+    ) else if /i "!user_choice_shortcut!"=="S" (
+        echo Creating shortcut in the startup folder...
+        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
+        echo objShell.SpecialFolders("AllUsersDesktop") = "%desktop_folder%" >> CreateShortcut.vbs
+        echo Set objShortCut = objShell.CreateShortcut("%startup_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
+        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
+        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
+        echo objShortCut.Save >> CreateShortcut.vbs
+        cscript CreateShortcut.vbs
+        del CreateShortcut.vbs
+        echo Shortcut created in the startup folder.
+
+    ) else if /i "!user_choice_shortcut!"=="B" (
+         echo Creating shortcut in the startup folder...
+        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
+        echo objShell.SpecialFolders("AllUsersDesktop") = "%desktop_folder%" >> CreateShortcut.vbs
+        echo Set objShortCut = objShell.CreateShortcut("%startup_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
+        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
+        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
+        echo objShortCut.Save >> CreateShortcut.vbs
+        cscript CreateShortcut.vbs
+        del CreateShortcut.vbs
+        echo Shortcut created in the startup folder.
+
+        echo Creating shortcut on the desktop...
+        echo Set objShell = CreateObject("WScript.Shell") > CreateShortcut.vbs
+        echo objShortCut = objShell.CreateShortcut("%desktop_folder%\%shortcut_name%.lnk") >> CreateShortcut.vbs
+        echo objShortCut.TargetPath = "%launcher_file%" >> CreateShortcut.vbs
+        echo objShortCut.IconLocation = "%icon_file%" >> CreateShortcut.vbs
+        echo objShortCut.Save >> CreateShortcut.vbs
+        cscript CreateShortcut.vbs
+        del CreateShortcut.vbs
+        echo Shortcut created on the desktop.
+
+    ) else (
+        echo Invalid choice.
+        goto shortcutOptions
+    )
+
+)
+
+set "launcherversion="
+for /f "tokens=3 delims=<>" %%a in (
+    'find /i "<Launcher>" ^< "%temp_meta_file%"'
+) do set "launcherversion=%%a"
+
+echo The current Launcher Script build is %launcherversion%
+
+:: get local version
+set "installedlauncher="
+for /f "tokens=3 delims=<>" %%a in (
+    'find /i "<Launcher>" ^< "%local_meta_file%"'
+) do set "installedlauncher=%%a"
+
+echo Your local Launcher Script version is %installedlauncher%
+echo.
+
+:: compare local to remote version
+
+if "%installedlauncher%" EQU "%launcherversion%" (
+    :: if versions are the same, run the local script, you're done!
+    echo Launcher up to date.
+    del "%temp_meta_file%"
+    exit /b 1
+    pause
+)
+
+curl -o "%launcher_file%" "%launcher_url%" --ssl-no-revoke -s || (
+    echo Error downloading icon file!
+    echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
+    pause
+    exit /b 1
+)
+
+:: Reset errorlevel to 0
+set errorlevel=0
+echo.
+
+:: Check the content of the downloaded file for "404: Not Found" - github download issue fix
+:: Use "findstr" to check if the file contains "404: Not Found" at all
+type "%launcher_file%" | findstr /C:"404: Not Found" >nul
+if not errorlevel 1 (
+    :: Use "for /f" to check if "404: Not Found" is the first line
+    for /f "usebackq delims=" %%a in ("%launcher_file%") do (
+        set "first_line=%%a"
+        goto :check_first_line
+    )
+
+    :check_first_line
+    if "!first_line!"=="404: Not Found" (
+        echo 404 Error occurred while downloading icon file!
+        echo Please report this issue to Ronald.Major@va.gov
+        pause
+        exit /b 1
+    )
+)
+
+echo Launcher updated
+echo.
+echo all done!
+timeout /t 10
+exit /b 1

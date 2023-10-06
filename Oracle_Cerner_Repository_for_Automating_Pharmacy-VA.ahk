@@ -17,6 +17,20 @@ Change Log:
 #Requires AutoHotkey v2.0
 #SingleInstance force
 
+/************************************************************ Icon *********************************************************************
+RM added 10/6/23
+Checks for icon presence in script directory, changes icon to it if exists.
+*/
+
+IconFileName := "ocrap.ico"
+
+if (FileExist(IconFileName))
+{
+    IconPath := A_ScriptDir "\" IconFileName 
+    Menu, Tray, Icon, %IconPath%
+}
+
+
 /************************************************************ WinMatch function *********************************************************************
 ; This is a function that may be used in hotkey to simplify code written for window handling. 
 ; System lag is a significant barrier and not all possible windows are encountered during development.
