@@ -36,7 +36,7 @@ if not exist "%target_directory%" (
 
 If not exist "%icon_file%" (
     curl -o "%icon_file%" "%icon_url%" --ssl-no-revoke -s || (
-            echo Error downloading icon file^! 
+            echo Error downloading icon file^^! 
             goto errorHalt
         )
         :: Reset errorlevel to 0
@@ -45,7 +45,7 @@ If not exist "%icon_file%" (
         :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
         type "%icon_file%" | findstr /C:"404: Not Found" >nul
         if not errorlevel 1 (
-            echo 404 Error occurred while downloading icon file^!
+            echo 404 Error occurred while downloading icon file^^!
         )
 )
 
@@ -65,7 +65,7 @@ goto Pass1
 :DownloadFiles
 echo Downloading OCRAP-VA.ahk
 curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
-    echo Error downloading ahk file^!
+    echo Error downloading ahk file^^!
     goto errorHalt
 )
 
@@ -77,13 +77,13 @@ echo.
 :: Check the content of the downloaded AHK file for "404: Not Found" - github download issue fix
 type "%local_script_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
-    echo 404 Error occurred while downloading ahk script file^!
+    echo 404 Error occurred while downloading ahk script file^^!
     goto errorHalt
 )
 
 echo Downloading ocrap_meta.xml
 curl -o "%local_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
-    echo Error downloading meta file^!
+    echo Error downloading meta file^^!
     goto errorHalt
 )
 
@@ -112,7 +112,7 @@ echo The launcher is comparing your local version against the latest build.
 :: get remote version
 echo Downloading build info...
 curl -o "%temp_meta_file%" "%meta_url%" --ssl-no-revoke -s || (
-    echo Error downloading Meta file^!
+    echo Error downloading Meta file^^!
     echo Please report this issue to Ronald.Major@va.gov
     pause
     goto retryPrompt
@@ -124,7 +124,7 @@ set errorlevel=0
 :: Check the content of the downloaded Meta file for "404: Not Found" - github download issue fix
 type "%temp_meta_file%" | findstr /C:"404: Not Found" >nul
 if not errorlevel 1 (
-    echo 404 Error occurred while downloading metadata file^!
+    echo 404 Error occurred while downloading metadata file^^!
     echo Please report this issue to Ronald.Major@va.gov and Lewis.DeJaegher@va.gov
     pause
     goto retryPrompt
@@ -156,7 +156,7 @@ if "%installedversion%" EQU "%buildversion%" (
 :: if versions are NOT the same, download remote before running
 echo The local version is different from the build version. The latest build will now be downloaded.
 curl -o "%local_script_file%" "%script_url%" --ssl-no-revoke -s || (
-    echo Error downloading ahk file^!
+    echo Error downloading ahk file^^!
     echo Please report this issue to Ronald.Major@va.gov
     echo.
     echo Attempting to start the old version of OCRAP-VA.ahk
@@ -183,7 +183,7 @@ set "ahk_exe_path=C:\Program Files\AutoHotkey\v2\AutoHotkey.exe"
 
 if not exist "%ahk_exe_path%" (
     echo.
-    echo Error^! - AutoHotkey v2 does not seem to be installed on this device.
+    echo Error^^! - AutoHotkey v2 does not seem to be installed on this device.
     echo Autohotkey v2 is required for this script to work. This program is TRM approved.
     echo See the related Pharmacy EHRM Community of Practice Channel thread for more info.
     echo.
@@ -313,13 +313,13 @@ if "%installedlauncher%" EQU "%launcherversion%" (
     :: Copy the contents of temp_meta_file to local_meta_file, then delete the temp
     copy /y "%temp_meta_file%" "%local_meta_file%" >nul
     del "%temp_meta_file%"
-    echo all done^!
+    echo all done^^!
     timeout /t 10
     exit /b 1
 )
 :downloadLauncher
 curl -o "%launcher_file%" "%launcher_url%" --ssl-no-revoke -s || (
-    echo Error downloading icon file^!
+    echo Error downloading icon file^^!
     goto errorHalt
 )
 
@@ -336,7 +336,7 @@ if not errorlevel 1 (
 
     :check_first_line
     if "!first_line!"=="404: Not Found" (
-        echo 404 Error occurred while downloading icon file^!
+        echo 404 Error occurred while downloading icon file^^!
         goto errorHalt
     )
 )
@@ -346,7 +346,7 @@ echo.
 :: Copy the contents of temp_meta_file to local_meta_file, overwriting it
 copy /y "%temp_meta_file%" "%local_meta_file%" >nul
 del "%temp_meta_file%"
-echo all done^!
+echo all done^^!
 timeout /t 10
 exit /b 1
 
