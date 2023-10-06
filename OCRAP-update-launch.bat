@@ -344,7 +344,7 @@ if not errorlevel 1 (
 echo Launcher updated
 echo.
 :: Copy the contents of temp_meta_file to local_meta_file, overwriting it
-copy /y "%temp_meta_file%" "%local_meta_file%"
+copy /y "%temp_meta_file%" "%local_meta_file%" >nul
 echo all done!
 timeout /t 10
 exit /b 1
