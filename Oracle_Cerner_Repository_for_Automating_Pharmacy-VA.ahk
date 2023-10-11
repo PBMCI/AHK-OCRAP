@@ -5,6 +5,8 @@ Stores scripted hotkeys to be used for automating processes in Oracle Cerner pha
 Contact: Lewis DeJaegher (lewis.dejaegher@va.gov)
 Additional documentation: https://dvagov.sharepoint.com/:u:/r/sites/PharmacyCernerEHRCommunityofPractice/Shared%20Documents/Outpatient%20Prescribing%20and%20Dispensing/AutoHotKey%20Automating%20Pharmacy/How%20to%20Guide%20for%20OCRAP-VA.url?csf=1&web=1&e=QdVDxB (alt+shift+h)
 Change Log:
+    2023/10/10 - Added IP/Med Manager lookup from PC patient (click encounter) or patient list (click row). Added logic to look for "open" (no patient) MMR and handling for when it appears ctrl+p failed to clear prior patient (e.g. open History window, unsubmitted actions). Started replacing unnecessary variables (e.g. used once) with hard coded values to simplify code.
+        - Ronnie Major developed launcher/updater file and iconography
     2023/10/04 - Added CMOP product line search; modified Outlook message to not restrict to HTML messages; updated MMR lookup for PC and DM to use WinClose; added MRN lookup from PBI report; applied fix to Alt+LClick to properly remove inactive meds if previously added
     2023/09/28 - Added tracking search and MMR search from message center in PC. Updated help to load SPO reference page, and exit hotkey to initiate email for reporting. Added block release where previously omitted. Updated message when MMR lookup fails to include copied value and clarify message.
     2023/09/15 - Applied fixes to infinite loop and failure to sort with Alt+LC (inactive meds), routing option change in Alt+Shift+F. Added alt+LC MMR lookup from V20 OP Dashboard.
@@ -17,19 +19,19 @@ Change Log:
 #Requires AutoHotkey v2.0
 #SingleInstance force
 
-/************************************************************ Icon *********************************************************************
+/************************************************************ Icon *********************************************************************************
 RM added 10/6/23
 Checks for icon presence in script directory, changes icon to it if exists.
-(currently not working - oops)
+****************************************************************************************************************************************************/
 
 IconFileName := "ocrap.ico"
 
 if (FileExist(IconFileName))
 {
     IconPath := A_ScriptDir "\" IconFileName 
-    Menu, Tray, Icon, %IconPath%
+    TraySetIcon IconPath,,true
 }
-*/
+
 
 /************************************************************ WinMatch function *********************************************************************
 ; This is a function that may be used in hotkey to simplify code written for window handling. 
@@ -374,7 +376,7 @@ GroupAdd "MSFT", "Microsoft Teams"
 GroupAdd "MSFT", "- Excel"
 GroupAdd "MSFT", "- Outlook"                                                                ; Outlook via reading pane
 GroupAdd "MSFT", "- Message"                                                                ; Open outlook message
-;GroupAdd "MSFT", "SQL Server Management Studio"                                             ; SSMS
+;GroupAdd "MSFT", "SQL Server Management Studio"                                             ; SSMS. Data users can uncomment this if they like but Alt+LClick is useful in ADS, SSMS.
 
 GroupAdd "ALC", "ahk_group MSFT"                                                            ; Add above group to overarching group
 GroupAdd "ALC", "\\Remote"                                                                  ; Cerner applications (possibly other remote desktop things too)
@@ -387,25 +389,8 @@ GroupAdd "ALC", "ahk_class Chrome_WidgetWin_1",,"Azure Data Studio"             
 CoordMode "Mouse", "Window"
 SetTitleMatchMode 2 	                                                                    ; A window's title can contain WinTitle anywhere inside it to be a match.
 
-/* PC to MMR patient search */
-xPosMRNPC := 126                                                                            ; Define positions in PowerChart
-yPosMRNPC := 246                                                                            ; Define positions in PowerChart
-xPosOKPC := 551                                                                             ; Define positions in PowerChart
-yPosOKPC := 419                                                                             ; Define positions in PowerChart
-
-/* Dispense Monitor to MMR patient search */
-xPosRxDM_1 := 20                                                                            ; Define RxNumber starting x position in view details window of DM
-xPosRxDM_2 := 115                                                                           ; Define RxNumber y position in view details window of DM
-yPosRxDM := 68                                                                              ; Define RxNumber ending x position in view details window of DM
-
-/* MMR positions */
-xPosMMRPatSearch := 63																	    ; Define x-position of Patient Search in MMR
-yPosMMRPatSearch := 172																	    ; Define y-position of Patient Search in MMR (account for patients with clinical note) 		
-xPosMMROrderSentence := 1100															    ; Define x-position of order sentence column header in MMR (may vary)
-yPosMMROrderSentence := 220																    ; Define y-position of order sentence column header in MMR (may vary)
-
 /* Script logic variables */
-ID := ""                                                                                    ; Variable to store ID value (PC = MRN; DM, CM, WQM = Rx#)
+ID := ""                                                                                    ; Variable to store ID value (PC = MRN or FIN; DM, CM, WQM = Rx#)
 Term := ""                                                                                  ; Variable to store the search term type
 
 BlockInput "On"                                                                             ; Block keyboard while executing
@@ -413,19 +398,42 @@ BlockInput "MouseMove"                                                          
 
 If WinActive("Opened by") or WinActive("PowerChart Organizer for")                          ; Window title for open chart in PC or Message Center    
     {
-    Patient := SubStr(WinGetTitle("A"),1,InStr(WinGetTitle("A")," - "))                     ; Extract patient name from WinTitle                    
+;    Patient := SubStr(WinGetTitle("A"),1,InStr(WinGetTitle("A")," - "))                     ; Extract patient name from WinTitle
+;    BannerColor := PixelGetColor(255,340)
     MouseClick "left", , , 1                                                                ; Click where mouse is
-    If WinWaitActive("Custom Information:", ,3)                                             ; Wait for Custom Information to load, we are going to get the MRN to load in MMR
-        {                                
-        MouseClick "left", xPosMRNPC, yPosMRNPC, 2                                          ; Double click to highlight MRN
-        A_Clipboard := ""																    ; Start off empty to allow ClipWait to detect when the text has arrived
-        Send "^c"																		    ; Copy MRN
+    If WinActive("PowerChart Organizer for") AND PixelGetColor(255,340) != 0x007BBD         ; Message center expected to have blue banner here, otherwise assume viewing Patient List in PC Organizer
+        {
+        A_Clipboard := ""																	; Start off empty to allow ClipWait to detect when the text has arrived
+        Send "^c"																			; Copies row
         Clipwait(2)
-        ID := StrReplace(A_Clipboard,"`r`n")											    ; Remove line feed/carriage return and assign copied text to ID variable
-        WinClose("Custom Information:")                                                     ; Close window
-        Term := "MRN"                                                                       ; Will use MRN as search term in MMR
+        ID := StrReplace(SubStr(A_Clipboard,RegExMatch(A_Clipboard,"\t\d\d\d\d\d\d\d\d\t"),10),"`t")    ; FIN values won't always be 8 characters long but this works for now
+        Term := "FIN"
         }
-    Else                                                                                    ; Window did not load in 3 seconds so exit (e.g. clicked somewhere else in PC) 
+    Else if WinWaitActive("Custom Information:", ,2)                                        ; Wait for Custom Information to load
+        {
+        WinGetPos , , &W, , "Custom Information:"                                           ; Get window width
+        If W < 800                                                                          ; Assess if we triggered by clicking Patient (narrower) or Encounter
+            {
+            MouseClick "left", 126, 246, 2                                                  ; Double click to highlight MRN
+            A_Clipboard := ""																; Start off empty to allow ClipWait to detect when the text has arrived
+            Send "^c"																		; Copy MRN
+            Clipwait(2)
+            ID := StrReplace(A_Clipboard,"`r`n")											; Remove line feed/carriage return and assign copied text to ID variable
+            WinClose("Custom Information:")                                                 ; Close window
+            Term := "MRN"                                                                   ; Will use MRN as search term in MMR
+            }
+        Else
+            {                                
+            MouseClick "left", 470, 397, 2                                                  ; Double click to highlight FIN
+            A_Clipboard := ""																; Start off empty to allow ClipWait to detect when the text has arrived
+            Send "^c"																		; Copy FIN
+            Clipwait(2)
+            ID := StrReplace(A_Clipboard,"`r`n")											; Remove line feed/carriage return and assign copied text to ID variable
+            WinClose("Custom Information:")                                                 ; Close window
+            Term := "FIN"                                                                   ; Will use FIN as search term in Med Manager
+            }
+        }
+    Else                                                                                    ; Window did not load in 2 seconds so exit (e.g. clicked somewhere else in PC) 
         {
         BlockInput "Off"
         BlockInput "MouseMove" "Off"
@@ -443,7 +451,7 @@ Else if WinActive("PharmNet: Dispense Monitor")                                 
         BlockInput "MouseMove" "Off"
         Exit      
         }
-    MouseClickDrag "left", xPosRxDM_1, yPosRxDM, xPosRxDM_2, yPosRxDM                       ; Need to click and drag to grab rx number
+    MouseClickDrag "left", 20, 68, 115, 68                                                  ; Need to click and drag to grab rx number
     A_Clipboard := ""																	    ; Start off empty to allow ClipWait to detect when the text has arrived
     Send "^c"																			    ; Copy rx number
     Clipwait(2)
@@ -481,7 +489,7 @@ Else if WinActive("- PharmNet: Retail Med")                                     
         {                                                                          
         Send "!o"                                                                           ; OK to close window
         WinWaitActive("- PharmNet: Retail Med",,1)
-        MouseClick "left", xPosMMROrderSentence, yPosMMROrderSentence, 1                    ; Click where we think the Order Sentence column header may exist (will vary)
+        MouseClick "left", 1100, 220, 1                                                     ; Click where we think the Order Sentence column header may exist (will vary)
         }
     BlockInput "Off"                                                                        ; Release blocks and exit
     BlockInput "MouseMove" "Off"
@@ -530,13 +538,12 @@ Else if WinActive("Product Selection") OR WinActive("for Patient:")             
         }
     Run Format('msedge.exe "https://vaww.pbi.cdw.va.gov/PBI_RS/report/GPE/CMOP_Analytics/DART/ProductLineSearch?Product={1}"', Term)
 
-    BlockInput "Off"                                                                    ; Release blocks and exit
+    BlockInput "Off"                                                                        ; Release blocks and exit
     BlockInput "MouseMove" "Off"
     Exit
     }
 
-Else if WinActive("ahk_group MSFT")
-;WinActive("Microsoft Teams") OR WinActive("- Excel") OR WinActive("- Message (HTML)") OR WinActive("- Outlook")  ; Called from Teams, Outlook, or Excel
+Else if WinActive("ahk_group MSFT")                                                         ; Called from Teams, Outlook, or Excel
     {
     If WinActive("- Excel")
         {
@@ -592,6 +599,12 @@ Else if WinActive("Suspended Orders Activity Log") OR WinActive("Dispense Detail
         BlockInput "MouseMove" "Off"
         Exit
         }
+    Else if InStr(A_Clipboard,"Acknowledged") > 0                                           ; If called on Ack row, load CMOP Cerner Rx Lookup report
+        {
+        ALWin := WinGetTitle("Suspended Orders Activity Log - <")
+        RxNumber := SubStr(ALWin,InStr(ALWin,"<")+1,13)
+        Run Format('msedge.exe "https://vaww.pbi.cdw.va.gov/PBI_RS/report/GPE/CMOP_Analytics/DART/Cerner%20Rx%20Lookup?SearchTerm={1}"', RxNumber)
+        }
     Else if InStr(A_Clipboard,"USPS") > 0 OR SubStr(Tracking,1,1) = "9"                     ; USPS starts with 9
         {
         Run Format('msedge.exe "https://tools.usps.com/go/TrackConfirmAction?qtc_tLabels1={1}"', Tracking)
@@ -618,6 +631,36 @@ Else if WinActive("Suspended Orders Activity Log") OR WinActive("Dispense Detail
     Exit
     }
 
+Else if WinActive("Suspended Order Details")                                                ; This is where we can get TRN, so we can search CMOP application/web portal
+    {
+    MouseClickDrag "left", 267, 420, 360, 420                                               ; Drag to highlight, double-click fails 2/2 hyphens
+    A_Clipboard := ""																	    ; Start off empty to allow ClipWait to detect when the text has arrived
+    Send "^c"																			    
+    Clipwait(2)
+    If A_Clipboard = ""                                                                     ; Make sure value exists in clipboard
+        {
+        WinMaximize("A")                                                                    
+        BlockInput "Off"
+        BlockInput "MouseMove" "Off"
+        Exit            
+        }
+    Run("msedge.exe https://vaww.cmop.med.va.gov/CMOPNationalWebApplication/", ,"Max")
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    WinWaitActive("Consolidated Mail Outpatient Pharmacy")                                  ; This may not always work due to log in, but will be in clipboard anyway
+    Send "^0"                                                                               ; Reset zoom so we know where to click
+    BlockInput "MouseMove"
+    Loop                                                                                    ; Check sidebar color as proof of completed page load
+        {
+        Sleep 250
+        } until PixelGetColor(75,800) = 0x1E2D54
+    MouseClick "left", 360, 440, 1                                                          ; Click in TRN box
+    Send A_Clipboard
+    Send "{Enter}"
+    BlockInput "MouseMove" "Off"
+    Exit    
+    }
+
 Else                                                                                        ; If user does this in other Cerner window
     {
     WinMaximize("A")                                                                        ; Make it big!
@@ -630,7 +673,36 @@ If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                           
     {
     BlockInput "Off"
     BlockInput "MouseMove" "Off"
-    MsgBox "Copied value either invalid or copy failed. Please try again.`n`nNote: if in WQM, trigger hotkey while clicking on Rx Number cell. In Dispense or Claims Monitor, click on the row. In PowerChart, on the patient name (the one that opens the patient info). In Teams, highlight Rx Number before calling hotkey. In Excel click on cell containing an Rx Number."
+    MsgBox "Copied value is invalid or copy failed. Please try again."
+    Exit
+    }
+
+If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                                      ; Term is FIN and an open MM is available
+    {
+    WinActivate("PharmNet: Pharmacy Med")                                                   ; Activate MMR
+;    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant)
+    Sleep 250
+    Send "!i"                                                                               ; Navigate to change the search term
+    Send "{Enter}"                                                                          ; Trigger drop down
+    Send "{Down}"
+    Send "{Enter}"                                                                          ; Select term
+    Sleep 250                                                                               
+    Send ID                                                                                 ; Send value
+    Send "{Enter}"                                                                          ; Initiate search
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    If !WinWaitNotActive("Pharmacy Medication", ,3)											; Wait up to 3 seconds to check if window doesn't change (i.e. patient loading)
+        {
+        A_Clipboard := ID
+        MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID)
+        }
+    Exit
+    }
+Else if Term = "FIN"
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"    
+    MsgBox Format("Unable to find open Med Manager without a patient loaded. FIN: {1} is copied, please search manually. Thanks!", ID)
     Exit
     }
 
@@ -641,31 +713,42 @@ If !WinExist("PharmNet: Retail Med")                                            
     Exit
     }
 
-WinActivate("PharmNet: Retail Med")                                                         ; Activate MMR
-WinWaitActive("PharmNet: Retail Med")                                                       ; Wait until active (redundant)
+Else if WinExist("PharmNet: Retail Med", ,",")                                              ; Check for MMR w/o loaded patient (assume patient name has comma; could move STMM = 1 up)
+    {
+    WinActivate("PharmNet: Retail Med", ,",")                                               ; Activate MMR
+;    WinWaitActive("PharmNet: Retail Med", ,",")                                            ; Wait until active (redundant)
+    }
+Else WinActivateBottom("PharmNet: Retail Med")                                              ; If user has multiple windows open, grab the window idle longest
+WinWaitActive("PharmNet: Retail Med")
+SetTitleMatchMode 1																		    ; Title must begin with- changed to differentiate MMR that has patient loaded v. not
 Sleep 250
-MouseClick "left", xPosMMRPatSearch, yPosMMRPatSearch, 1                                    ; Placing cursor because ctrl+p doesn't work if no patient is selected and user has clicked out of search box
+MouseClick "left", 63, 172, 1                                                               ; Placing cursor because ctrl+p doesn't work if no patient is selected and user has clicked out of search box
 Send "^p"                                                                                   ; And sending ctrl+p because it seems to work most reliably to do both
-Sleep 250                                                                                   ; System lag
+Sleep 500                                                                                   ; System lag
+If !WinActive("PharmNet: Retail Med")                                                       ; If ctrl+p did not result in WinTitle("A") beginning with PharmNet, a window may be open
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    MsgBox Format("MMR may not be available for search. Please check for an open window or warning. {1}: {2} is copied, please complete search manually when ready. Thanks!", Term, ID), ,"4096 T5"
+    Exit
+    }
 Send "{Tab}"                                                                                ; Navigate to change the search term
 Send "{Enter}"                                                                              ; Trigger drop down
 If Term = "MRN"                                                                             
     {
     Send "{Down 3}"                                                                         ; 3rd value in list
+    Send "{Enter}" 
+    Sleep 500
     }
 Else if Term = "Rx"                                                                         
     {
     Send "{Down 4}"                                                                         ; 4th value in list
-    }
-Send "{Enter}"                                                                              ; Select term
-Sleep 500                                                                               
-If Term = "Rx"                                                                              ; If rx number, need to clear rx number prefix
-    {
-    Send "{Backspace 2}"
+    Send "{Enter}"                                                                          ; Select term
+    Sleep 500                                                                               
+    Send "{Backspace 2}"                                                                    ; Clear prefix
     }
 Send ID                                                                                     ; Send value
 Send "{Enter}"                                                                              ; Initiate search
-SetTitleMatchMode 1																		    ; Title must begin with- changed to differentiate MMR that has patient loaded v. not
 BlockInput "Off"
 BlockInput "MouseMove" "Off"
 If !WinWaitNotActive("PharmNet: Retail", ,3)											    ; Wait up to 3 seconds to check if window doesn't change (i.e. patient loading)
