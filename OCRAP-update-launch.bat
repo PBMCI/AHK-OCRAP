@@ -179,7 +179,7 @@ echo Success. You are now on the latest version.
 :: in any case, start the script
 :LaunchScript
 :: Check if AutoHotkey is installed - need to verify path
-set "ahk_exe_path=C:\Program Files\AutoHotkey\v2\AutoHotkey.exe"
+set "ahk_exe_path=C:\Program Files\AutoHotkey\v2\AutoHot*.exe"
 
 if not exist "%ahk_exe_path%" (
     echo.
