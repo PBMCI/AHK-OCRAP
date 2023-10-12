@@ -6,6 +6,11 @@ echo OCRAP-VA auto updating launcher
 echo This script updates and launches the Oracle Cerner Repository for Automating Pharmacy-VA (OCRAP-VA) by Lewis DeJaegher
 echo.
 
+
+
+
+
+
 :: Define the URL of your AutoHotkey script and xml meta files
 set "repo_base_url=https://raw.githubusercontent.com/PBMCI/AHK-OCRAP/main"
 set "script_url=%repo_base_url%/Oracle_Cerner_Repository_for_Automating_Pharmacy-VA.ahk"
@@ -13,8 +18,19 @@ set "meta_url=%repo_base_url%/ocrap_meta.xml"
 set "icon_url=%repo_base_url%/images/ocrap.ico"
 set "launcher_url=%repo_base_url%/OCRAP-update-launch.bat"
 
+:: define what we call the shortcut
+set "shortcut_name=OCRAP-VA"
+
 :: Define the local path where the meta file is
-set "target_directory=%USERPROFILE%\AppData\Roaming\OCRAP"
+:: Check for OneDrive folder
+set "onedrive_folder=%USERPROFILE%\OneDrive - Department of Veterans Affairs"
+if exist "!onedrive_folder!" (
+    echo OneDrive is in use.
+    set "target_directory=!onedrive_folder!\OCRAP"
+) else (
+    echo OneDrive is not in use.
+    set "target_directory=%USERPROFILE%\AppData\Roaming\OCRAP"
+)
 set "local_meta_file=%target_directory%\ocrap_meta.xml"
 set "local_script_file=%target_directory%\ocrap-va.ahk"
 set "temp_meta_file=%target_directory%\temp_meta.xml"
@@ -28,8 +44,25 @@ set errorlevel=0
 
 :: Check if the directory exists
 if not exist "%target_directory%" (
-    echo This must be new for you...
-    echo Creating your OCRAP directory here: %target_directory%
+    echo Installing as new...
+    if exist "%onedrive_folder%" (
+        echo Creating your OCRAP directory in OneDrive
+        if exist "%USERPROFILE%\AppData\Roaming\OCRAP" (
+            echo Removing old userdata install location
+
+            echo Removing old shortcuts due to new install location
+            if exist "%startup_folder%\%shortcut_name%.lnk" (
+                del "%startup_folder%\%shortcut_name%.lnk"
+            )
+            If exist "%desktop_folder%\%shortcut_name%.lnk" (
+                del "%desktop_folder%\%shortcut_name%.lnk"
+            )
+
+        )
+    ) else (
+        echo Creating your OCRAP folder in the following directory: 
+    )
+    echo  %target_directory%
     mkdir "%target_directory%"
     echo.
 )
@@ -178,12 +211,15 @@ echo Success. You are now on the latest version.
 
 :: in any case, start the script
 :LaunchScript
-:: Check if AutoHotkey is installed - need to verify path
-set "ahk_exe_path=C:\Program Files\AutoHotkey\v2\AutoHot*.exe"
+:: get the association for .ahk files
+for /f "tokens=2" %%A in ('assoc .ahk 2^>nul') do (
+    set "file_association=%%A"
+)
 
-if not exist "%ahk_exe_path%" (
+:: if an association is not defined, trigger an alert and choice
+if not defined file_association (
     echo.
-    echo Error - AutoHotkey v2 does not seem to be installed on this device.
+    echo Error - AutoHotkey does not seem to be installed on this device.
     echo Autohotkey v2 is required for this script to work. This program is TRM approved.
     echo See the related Pharmacy EHRM Community of Practice Channel thread for more info.
     echo.
@@ -212,7 +248,6 @@ start "" "%local_script_file%"
 
 :: Check if the run was successful
 if %errorlevel% equ 0 (
-    echo OCRAP-VA.ahk has Launched.
     echo.
 ) else (
     echo Launch Attempted despite some errors.
@@ -222,7 +257,7 @@ if %errorlevel% equ 0 (
     pause
 )
 :: If no shortcuts found, prompt for creation
-set "shortcut_name=OCRAP-VA"
+
 if not exist "%startup_folder%\%shortcut_name%.lnk" (
 
     If not exist "%desktop_folder%\%shortcut_name%.lnk" (   
