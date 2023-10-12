@@ -680,7 +680,7 @@ If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                           
 If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                                      ; Term is FIN and an open MM is available
     {
     WinActivate("PharmNet: Pharmacy Med")                                                   ; Activate MMR
-;    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant)
+    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant but improves reliability)
     Sleep 250
     Send "!i"                                                                               ; Navigate to change the search term
     Send "{Enter}"                                                                          ; Trigger drop down
