@@ -687,11 +687,12 @@ If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                          
     Send "{Down}"
     Send "{Enter}"                                                                          ; Select term
     Sleep 250                                                                               
+    MouseClick "left", 67,173, 1                                                            ; If user clicks in side bar, cursor won't exist in search field
     Send ID                                                                                 ; Send value
     Send "{Enter}"                                                                          ; Initiate search
     BlockInput "Off"
     BlockInput "MouseMove" "Off"
-    If !WinWaitNotActive("Pharmacy Medication", ,3)											; Wait up to 3 seconds to check if window doesn't change (i.e. patient loading)
+    If !WinWaitNotActive("Pharmacy Medication", ,5)											; Wait up to 5 seconds to check if window doesn't change (i.e. patient loading)
         {
         A_Clipboard := ID
         MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID)
