@@ -211,7 +211,7 @@ echo Success. You are now on the latest version.
 :: in any case, start the script
 :LaunchScript
 :: get the association for .ahk files
-for /f "tokens=2" %%A in ('assoc .ahk 2^>nul') do (
+for /f "tokens=1" %%A in ('assoc .ahk 2^>nul') do (
     set "file_association=%%A"
 )
 
