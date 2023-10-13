@@ -379,4 +379,3 @@ echo Please report this issue to Ronald.Major@va.gov
         echo Please enter any of Y, N, y, n.
         goto retryPrompt
     )
-)
