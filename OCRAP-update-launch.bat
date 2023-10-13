@@ -383,7 +383,7 @@ If exist "%temp_meta_file%" (
 copy /y "%temp_meta_file%" "%local_meta_file%" >nul
 del "%temp_meta_file%"
 )
-echo all done
+echo All done. 
 timeout /t 10
 exit /b 1
 
@@ -391,3 +391,24 @@ exit /b 1
 echo Please report this issue to Ronald.Major@va.gov
         pause
         exit /b 1
+
+    :: Prompt the user for input
+:retryPrompt
+    set "user_choice="
+    set /p "user_choice=Would you like to try to start the script anyways? Y or N: "
+    :: Check the user's choice and determine the next action
+    if /i "!user_choice!"=="y" (
+        echo.
+        echo Attempting script start...
+        goto LaunchScript
+    ) else if /i "!user_choice!"=="n" (
+        echo.
+        echo Exiting
+        timeout /t 3
+        exit /b 1
+    ) else (
+        echo Invalid choice.
+        echo Please enter any of Y, N, y, n.
+        goto retryPrompt
+    )
+)
