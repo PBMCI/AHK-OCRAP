@@ -24,7 +24,7 @@ set "shortcut_name=OCRAP-VA"
 :: Define the local path where the meta file is
 :: Check for OneDrive folder
 set "onedrive_folder=%USERPROFILE%\OneDrive - Department of Veterans Affairs"
-if exist "!onedrive_folder!" (
+if exist "%onedrive_folder%" (
     echo OneDrive is in use.
     set "target_directory=!onedrive_folder!\OCRAP"
 ) else (
@@ -62,7 +62,7 @@ if not exist "%target_directory%" (
     ) else (
         echo Creating your OCRAP folder in the following directory: 
     )
-    echo  %target_directory%
+    echo  "%target_directory%"
     mkdir "%target_directory%"
     echo.
 )
@@ -318,7 +318,7 @@ if not exist "%startup_folder%\%shortcut_name%.lnk" (
 )
 )
 
-if not exist %launcher_file% (
+if not exist "%launcher_file%" (
     goto downloadLauncher
 )
 
@@ -345,7 +345,7 @@ if "%installedlauncher%" EQU "%launcherversion%" (
     :: if versions are the same, run the local script, you're done!
     echo Launcher up to date.
     :: Copy the contents of temp_meta_file to local_meta_file, then delete the temp
-    If exist %temp_meta_file% (
+    If exist "%temp_meta_file%" (
         copy /y "%temp_meta_file%" "%local_meta_file%" >nul
         del "%temp_meta_file%"
     )
@@ -380,7 +380,7 @@ if not errorlevel 1 (
 echo Launcher updated
 echo.
 :: Copy the contents of temp_meta_file to local_meta_file, overwriting it
-If exist %temp_meta_file% (
+If exist "%temp_meta_file%" (
 copy /y "%temp_meta_file%" "%local_meta_file%" >nul
 del "%temp_meta_file%"
 )
