@@ -210,38 +210,6 @@ echo Success. You are now on the latest version.
 
 :: in any case, start the script
 :LaunchScript
-:: get the association for .ahk files
-for /f "tokens=1" %%A in ('assoc .ahk 2^>nul') do (
-    set "file_association=%%A"
-)
-
-:: if an association is not defined, trigger an alert and choice
-if not defined file_association (
-    echo.
-    echo Error - AutoHotkey does not seem to be installed on this device.
-    echo Autohotkey v2 is required for this script to work. This program is TRM approved.
-    echo See the related Pharmacy EHRM Community of Practice Channel thread for more info.
-    echo.
-
-    :: Prompt the user for input
-:retryPrompt
-    set "user_choice="
-    set /p "user_choice=Would you like to try to start the script anyways? Y or N: "
-    :: Check the user's choice and determine the next action
-    if /i "!user_choice!"=="y" (
-        echo.
-        echo Attempting script start...
-    ) else if /i "!user_choice!"=="n" (
-        echo.
-        echo Exiting
-        timeout /t 3
-        exit /b 1
-    ) else (
-        echo Invalid choice.
-        echo Please enter any of Y, N, y, n.
-        goto retryPrompt
-    )
-)
 
 start "" "%local_script_file%"
 
