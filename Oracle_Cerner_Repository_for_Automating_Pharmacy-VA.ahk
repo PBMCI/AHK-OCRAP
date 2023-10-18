@@ -139,7 +139,7 @@ exit
 !+o::
 {
 Run ("https://ssoiaccess.valehr.cernerworks.ehr.gov/Citrix/USVADCweb/#")
-MsgBox("Good luck today!","Welcome","4096 T2")
+MsgBox("Good luck today!","Welcome","4096 T4")
 Exit
 }
 
@@ -680,7 +680,7 @@ If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                           
 If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                                      ; Term is FIN and an open MM is available
     {
     WinActivate("PharmNet: Pharmacy Med")                                                   ; Activate MMR
-    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant but improves reliability)
+;    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant)
     Sleep 250
     Send "!i"                                                                               ; Navigate to change the search term
     Send "{Enter}"                                                                          ; Trigger drop down
