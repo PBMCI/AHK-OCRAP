@@ -5,6 +5,7 @@ Stores scripted hotkeys to be used for automating processes in Oracle Cerner pha
 Contact: Lewis DeJaegher (lewis.dejaegher@va.gov)
 Additional documentation: https://dvagov.sharepoint.com/:u:/r/sites/PharmacyCernerEHRCommunityofPractice/Shared%20Documents/Outpatient%20Prescribing%20and%20Dispensing/AutoHotKey%20Automating%20Pharmacy/How%20to%20Guide%20for%20OCRAP-VA.url?csf=1&web=1&e=QdVDxB (alt+shift+h)
 Change Log:
+    2023/10/19 - Added GUI to Alt+Shift+F to allow user to limit script to specific items and receive input. Added CheckHP function to evaluate and remove DoD HPs; added Alt+O hotkey to use that function and incorporated into Alt+Shift+F
     2023/10/10 - Added IP/Med Manager lookup from PC patient (click encounter) or patient list (click row). Added logic to look for "open" (no patient) MMR and handling for when it appears ctrl+p failed to clear prior patient (e.g. open History window, unsubmitted actions). Started replacing unnecessary variables (e.g. used once) with hard coded values to simplify code.
         - Ronnie Major developed launcher/updater file and iconography
     2023/10/04 - Added CMOP product line search; modified Outlook message to not restrict to HTML messages; updated MMR lookup for PC and DM to use WinClose; added MRN lookup from PBI report; applied fix to Alt+LClick to properly remove inactive meds if previously added
@@ -78,6 +79,72 @@ WinMatch(Expected, Delay)
 		}
 }
 
+/************************************************************ CheckHP function *********************************************************************
+; This is a function that may be used in hotkey to remove DoD health plans during script processing to avoid unnecessary claim workload
+; Script checks initial HP, then uses down key to check next HP listed. If only DoD HP is available, the DoD HP will be removed.
+; Function expected to only be called when a [New Order/Refill/Bill Only/Modify] for Patient: [Patient Name]  [DOB: ] is open
+;   Similarly titled windows may exist (e.g. Inquire for Patient Name:) so attention to window title/context is necessary when using this function
+****************************************************************************************************************************************************/
+
+CheckHP()
+{
+WinActivate("for Patient:")
+HP := "empty"
+If WinActive("Bill Only")																	; Bill only window is larger 2/2 row of checkboxes above routing option
+	{
+	MouseClick "left", 27, 540, 1, 0		
+	}
+Else
+	{	
+	MouseClick "left", 27, 500, 1, 0
+	}
+Send "{F4}"																					; This expands drop down and improves copy performance
+Loop 5																						; This is to prevent an infinite loop should logic fail
+	{
+	A_Clipboard := ""
+	Send "^c"
+	Clipwait(2)
+	If A_Clipboard = "(None)" OR RegExMatch(SubStr(A_Clipboard,1,1),"\D") = 1				; If selected HP is (None) or starts with alpha character, accept and move on
+		{
+		Send "{Enter}"
+		Break
+		}
+	Else if RegExMatch(SubStr(A_Clipboard,1,1),"\d") = 1 AND HP = A_Clipboard				; If selected HP begins with number, it is DoD. If it is the same HP as last run, delete and move on
+		{
+		Send "{Backspace}"
+		Send "{Enter}"
+		Break
+		}
+	Else if RegExMatch(SubStr(A_Clipboard,1,1),"\d") = 1									; If selected HP begins with number, store it as variable and check next HP
+		{
+		HP := A_Clipboard
+		Send "{Down}"
+		}
+	}
+Return
+}
+
+/************************************************************ Alt+O (OK) ***************************************************************************
+; This hotkey will check for presence of a DoD HP and attempt to remove or replace using CheckHP() function above. 
+; NOTE: Scripts that include "!o" at these two windows may be adversely impacted. Additional controls and/or modification of (#)HotIf logic may be necessary. https://www.autohotkey.com/docs/v2/lib/_HotIf.htm
+;   Expected outcome would be that initial hotkey would interrupt, this hotkey will run, then prior hotkey will resume. This may be acceptable in this instance and would just need to ensure action is not duplicated.
+;   Initial testing of failures hotkey 
+;   Consider using A_Priorhotkey: https://www.autohotkey.com/docs/v2/Variables.htm#PriorHotkey
+; NOTE: "!o" will not trigger itself "By default, a given hotkey or hotstring subroutine cannot be run a second time if it is already running." https://www.autohotkey.com/docs/v2/misc/Threads.htm
+****************************************************************************************************************************************************/
+
+GroupAdd "HP", "Refill for Patient:"
+GroupAdd "HP", "New Order for Patient:"
+
+#HotIf WinActive("ahk_group HP")															; #HotIf does not prevent other hotkeys from calling this hotkey
+!o::
+{
+CheckHP()
+Send "!o"																					; See threads documentation in header
+Exit
+}
+#HotIf
+
 /************************************************************ Alt + Shift + U (Unclaim) ***********************************************************************
 ; This hotkey is used to process unclaim actions in a batches of up to 40 rows
 ; Potential enhancement:
@@ -113,19 +180,17 @@ if iter.Value < 1 or iter.Value > 40
         {
             MouseClick "left", xPos, yPos, 2								                ; double click on row to open claim
             WinMatch("View Claim", 4)
-;		    WinWaitActive("View Claim")									                    ; wait for new window to appear
 		    Send "!s"											                            ; alt+s to select claim status
 		    Send "u"    										                            ; u to update status to unclaimed
 		    Send "!o"											                            ; alt+o to select OK
             WinMatch("PharmNet: Claims Monitor - \\Remote", 4)
-;		    WinWaitActive("PharmNet: Claims Monitor - \\Remote")
             yPos += 18											                            ; adjust vertical position
             i += 1												                            ; update counter
         }
     ToolTip "", , ,1                                                                        ; Disable tool tip
     BlockInput "Off"
     BlockInput "MouseMove" "Off"
-    MsgBox "Please review claim status prior to submitting."							    ; alert user that process is complete
+    MsgBox "Please review claim status prior to submitting.",,"T4"							; alert user that process is complete
     }
 exit
 }
@@ -154,7 +219,8 @@ Exit
     ; Copy row rather than single cell to allow more flexibility and allow for include/exclude criteria to be passed by user, for instance: drug name. Example scenario: user wants to process all stock kickbacks except semaglutide, so exclude semaglutide and vice versa.
 *************************************************************************************************************************************************************/
 
-!+F::                                                                                       ; Alt+Shift+F (Failures)
+#HotIf WinActive("Work Queue Monitor")
+!+f::                                                                                       ; Alt+Shift+F (Failures)
 {
 CoordMode "Mouse", "Window"
 SetTitleMatchMode 2 	                                                                    ; A window's title can contain WinTitle anywhere inside it to be a match.
@@ -170,35 +236,87 @@ HPIneffective := ("Health plan either ineffective or card holder identity change
 ProdInactive := ("The product has been inactivated")
 
 ; Create variables
-xPosFailureDetail := 330                                                                    ; Define x-position of Failure Detail in Work Queue Monitor - Defined for Failure Detail in column 3 (Action, Rx Number, Failure Detail, ...)
 yPosFailureDetail := 160                                                                    ; Define y-position of Failure Detail in Work Queue Monitor (initially row 1, may increment in script)
-xPosRoutOpt := 81													                        ; Define x-position of Routing Option in Bill Only for patient screen (where CMOP, local, etc. is selected)
-yPosRoutOpt := 441													                        ; Define y-position of Routing Option in Bill Only for patient screen
 ExpWin := ""																				; Variable used when checking active window prior to progressing
 ExitReason := ""																			; Variable to populate message box triggered prior to exit
+IncludeFlag := 0																			; Flag value = 1, user checked box to limit to specific items; flag value = 0, all items OK
+RowCount := 0																				; Variable to allow user to define iterations
+IncludeList := []																			; Array allows multiple items to be entered so building for that
 
-Loop
+; Create GUI for failure resolution routine to prompt and receive variables, wrapping as function to ensure script waits for GUI submit
+GUIFail(*)
 {
-iter := InputBox("This script will attempt to resolve specific failures in Work Queue Monitor.`n`nPlease make sure you have the appropriate view selected.`n`nHow many rows would you like to attempt?)", "Batch Failure Resolution", "w400 h175")	; Limited by window size. May be able to increase using pg down/pg up but 40 is probably sufficient.
-if iter.Result = "Cancel"											                        ; If user selects cancel then exit
-    exit
-else if iter.Value > 0
-	break
-else if iter.Value < 1 and A_Index = 3								        				; If user enters zero on 3 consecutive tries then exit
-    exit
-else if iter.Value < 1
-    continue													                            ; Restart loop if entered value is out of bounds
+	FileMenu := Menu()
+	FileMenu.Add "E&xit", call_reload														; Function call will reload script, hiding GUI
+	HelpMenu := Menu()
+	HelpMenu.Add "&About", (*) => Run("https://dvagov.sharepoint.com/sites/PharmacyCernerEHRCommunityofPractice/SitePages/Oracle-Cerner-Repository-for-Automating-Pharmacy-VA.aspx#alt%2Bshift%2Bf-failure-resolution")
+	Menus := MenuBar()
+	Menus.Add "&File", FileMenu  ; Attach the two submenus that were created above.
+	Menus.Add "&Help", HelpMenu
+	MyGui := Gui()
+	MyGui.Opt("+AlwaysOnTop")
+	MyGui.MenuBar := Menus
+	MyGui.Title := "Alt+Shift+F (Failures) Hotkey"
+	MyGui.AddText("", "This script will attempt to resolve specific failures in Work Queue `rMonitor. Please make sure you have the appropriate view selected.`n`nHow many rows would you like to attempt?")
+	MyGui.AddEdit("r1 vRowCount w24 x240 y42")
+	MyGui.AddText("Section x10","`nCheck this box to limit script to a specific item. `rItem name will be entered at next screen.`r")
+	MyGui.AddCheckBox("vInclusion x246 y88")
+	MyGui.AddButton("Section w80 x130", "&OK").OnEvent("Click", Submit)  			; Button to call Submit function
+	MyGui.OnEvent("Close", call_reload)														; Function call will reload script, hiding GUI
+	MyGui.Show "w340"
+	WinWaitClose("Alt+Shift+F (Failures) Hotkey")											; Wait for GUI window to close before returning call
+	Return
+
+Submit(*)																					; Function to save GUI input
+{
+    Saved := MyGui.Submit(1)
+	IncludeFlag := Saved.Inclusion
+	If IsInteger(Saved.RowCount) 															; If RowCount value is non-integer, leave it as zero so script will exit
+		{
+		RowCount := Saved.RowCount
+		}
+	Return	
 }
 
+call_reload(*)																				; Function to remove GUI and reload script
+{
+	MyGui.Destroy()
+	Reload 																					; Reload is giving me less headache than Exit and it keeps script available
+	Return
+}
+}
+
+GUIFail()																					; Call GUI
+
+If RowCount < 1																				; Exit if entered value is invalid
+	{
+	Exit
+	}
+
+If IncludeFlag = 1
+; String version
+	{
+	Include := InputBox("If you would like to limit to specific items, enter an item name here as displayed in your view. `n`nIf no item is entered, the script will attempt to process all prescriptions with a qualifying failure detail that are displayed in view.", "Inclusion List")
+
+	If include.Result = "OK" AND include.Value != ""			
+		{
+		IncludeList.Push(StrUpper(include.Value))											; Array isn't necessary at this point but could be developed to put multiple items into list (worth it?)
+		}
+	Else if include.Result = "Cancel"
+		{
+		Exit
+		}	
+	}
+
 ToolTip "Please wait, script is executing", 875, 32, 1                                      ; Display tool tip so user knows script is running
-Loop iter.Value                                                                             ; Limiting to 20 iterations because it seems unwise to let it run endlessly
+Loop RowCount                                                                           	; Loop as many times as user defined
     {
     WinActivate("Work Queue Monitor")
     Loop 3                                                                                  ; If copy fails 3 times, stop looping
         {
         Sleep 250
-        MouseClick "left", xPosFailureDetail, yPosFailureDetail, 1
         FailureDetail := ""																	; Empty FailureDetail variable
+        MouseClick "left", 330, yPosFailureDetail, 1
         A_Clipboard := ""																	; Start off empty to allow ClipWait to detect when the text has arrived
         Send "^c"																			; Copy failure detail
         Clipwait(2)
@@ -215,6 +333,21 @@ Loop iter.Value                                                                 
         Break                                                                               ; Break action loop if copy unsuccessful
         }
 
+	If IncludeList.Length > 0																; In case a user checks the box but then enters no value
+		{
+		MouseClick "left", 33, yPosFailureDetail, 1											; Click on row to 
+		A_Clipboard := ""																	; Start off empty to allow ClipWait to detect when the text has arrived
+		Send "^c"																			; Copy failure detail
+		Clipwait(2)
+
+/* Since currently limited to single entry, we only need value at index position = 1 */						
+		If InStr(StrUpper(A_Clipboard),"`t" IncludeList.Get(1)) = 0							; If clipboard (row) does not include item from include list, increment position and try next row							
+			{
+			yPosFailureDetail += 18
+			Continue
+			}
+		}
+		
 ; Once copied and initial validitation checks performed, compare to string values to determine which resolution pathway to take
 
 ; CMOP or Local Resuspend sequence; pre-transmission failures may not always trigger initial Bill-Only window (e.g. external refill requests will not have a fill to cancel) so may need to revise this section for those to consistently work
@@ -249,7 +382,7 @@ Loop iter.Value                                                                 
 		WinMatch("Bill Only for Patient", 15)
 		if InStr(LocalResuspend, FailureDetail) > 0                                         ; If resuspending to local, need to update routing option
 			{
-			MouseClick "left", xPosRoutOpt, yPosRoutOpt, 1					                ; Navigate to routing option
+			MouseClick "left", 81, 441, 1					                				; Navigate to routing option
             Send "^a^a"                                                                     ; Ctrl+A x2 seems to clear the value (rather than select all)
             Send "{Backspace}"                                                              ; But if it does select all, then backspace to clear
 			Send "Local Regular Mail"                               		                ; Update to local regular mail
@@ -257,6 +390,7 @@ Loop iter.Value                                                                 
 			Send "!u" 					                            		                ; Continue to accept default routing option override reason
 			}
 		WinWaitActive("Bill Only for Patient")                  		                	; Rx ready to submit - could pause here for pharmacist to review
+		CheckHP()                                                                           ; Calling CheckHP() as !o on next line won't trigger due to #HotIf
 		Send "!o"					                            		                    ; OK to accept and move to next or exit if done
         ;Send "!c"
 		WinWaitNotActive("Bill Only for Patient")
@@ -301,8 +435,8 @@ Loop iter.Value                                                                 
 			Send "{Enter}"
 			}
 		WinWaitActive("Refill for Patient")                  		                    	; Rx ready to submit - could pause here for pharmacist to review
+		CheckHP()                                                                           ; Calling CheckHP() here does not appear to lead to duplication with !o
 		Send "!o"					                            		                	; OK to accept and move to next or exit if done. Consider if adding pause for input would be better.
-        ;Send "!c"					                            		                	; Cancel to keep row in WQM for iterative testing
 		WinWaitNotActive("Refill for Patient")
         WinWaitActive("Work Queue Monitor")
         Continue                                                                            ; This rx is done, restart loop
@@ -323,12 +457,11 @@ Loop iter.Value                                                                 
 			}
 		WinMatch("Refill for Patient", 15)
 		Sleep 250
+		CheckHP()                                                                           ; Calling CheckHP() here does not appear to lead to duplication with !o
         Send "!o"
-        ;Send "!c"					                            		                	; Cancel to keep row in WQM for iterative testing
         WinWaitActive("Work Queue Monitor")
         Continue                                                            				; This rx is done, restart loop
         }
-    ;Total += 1
     yPosFailureDetail += 18    
     }
 If ExitReason = ""
@@ -342,6 +475,7 @@ ToolTip "", , ,1                                                                
 MsgBox "Exiting script" ExitReason
 Exit
 }
+#HotIf
 
 /************************************************************ Alt+Left Mouse Button  ***************************************************************
 ; This hotkey does a lot of different things in various Cerner or Microsoft applications.  
@@ -398,8 +532,6 @@ BlockInput "MouseMove"                                                          
 
 If WinActive("Opened by") or WinActive("PowerChart Organizer for")                          ; Window title for open chart in PC or Message Center    
     {
-;    Patient := SubStr(WinGetTitle("A"),1,InStr(WinGetTitle("A")," - "))                     ; Extract patient name from WinTitle
-;    BannerColor := PixelGetColor(255,340)
     MouseClick "left", , , 1                                                                ; Click where mouse is
     If WinActive("PowerChart Organizer for") AND PixelGetColor(255,340) != 0x007BBD         ; Message center expected to have blue banner here, otherwise assume viewing Patient List in PC Organizer
         {
@@ -483,14 +615,16 @@ Else if WinActive("PharmNet: Claims Monitor")                                   
 Else if WinActive("- PharmNet: Retail Med")                                                 ; Called in MMR with patient loaded so we're going to add inactive orders
     {
     WinActivate("- PharmNet: Retail Med")
+    MouseGetPos &xpos, &ypos                                                                ; Grab mouse position so we can place back later
     Send "!v"                                                                               ; Alt+V to open View menu
     Send "{Enter}"                                                                          ; Enter to select first option (Inactive Orders)
     If WinWaitActive("View Profile by Status",,0.5)                                         ; If adding, View Profile by Status should appear
         {                                                                          
         Send "!o"                                                                           ; OK to close window
         WinWaitActive("- PharmNet: Retail Med",,1)
-        MouseClick "left", 1100, 220, 1                                                     ; Click where we think the Order Sentence column header may exist (will vary)
+        MouseClick "left", 1100, 220, 1, 0                                                  ; Click where we think the Order Sentence column header may exist (will vary)
         }
+    MouseMove xpos, ypos, 0                                                                 ; Put the mouse back where it was
     BlockInput "Off"                                                                        ; Release blocks and exit
     BlockInput "MouseMove" "Off"
     Exit
@@ -673,7 +807,7 @@ If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                           
     {
     BlockInput "Off"
     BlockInput "MouseMove" "Off"
-    MsgBox "Copied value is invalid or copy failed. Please try again."
+    MsgBox "Copied value is invalid or copy failed. Please try again.",,"T5"
     Exit
     }
 
@@ -695,7 +829,7 @@ If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                          
     If !WinWaitNotActive("Pharmacy Medication", ,5)											; Wait up to 5 seconds to check if window doesn't change (i.e. patient loading)
         {
         A_Clipboard := ID
-        MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID)
+        MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID),,"T5"
         }
     Exit
     }
@@ -703,7 +837,7 @@ Else if Term = "FIN"
     {
     BlockInput "Off"
     BlockInput "MouseMove" "Off"    
-    MsgBox Format("Unable to find open Med Manager without a patient loaded. FIN: {1} is copied, please search manually. Thanks!", ID)
+    MsgBox Format("Unable to find open Med Manager without a patient loaded. FIN: {1} is copied, please search manually. Thanks!", ID),,"T5"
     Exit
     }
 
@@ -713,13 +847,13 @@ If !WinExist("PharmNet: Retail Med")                                            
     BlockInput "MouseMove" "Off"
     Exit
     }
-
 Else if WinExist("PharmNet: Retail Med", ,",")                                              ; Check for MMR w/o loaded patient (assume patient name has comma; could move STMM = 1 up)
     {
     WinActivate("PharmNet: Retail Med", ,",")                                               ; Activate MMR
 ;    WinWaitActive("PharmNet: Retail Med", ,",")                                            ; Wait until active (redundant)
     }
 Else WinActivateBottom("PharmNet: Retail Med")                                              ; If user has multiple windows open, grab the window idle longest
+
 WinWaitActive("PharmNet: Retail Med")
 SetTitleMatchMode 1																		    ; Title must begin with- changed to differentiate MMR that has patient loaded v. not
 Sleep 250
@@ -755,7 +889,7 @@ BlockInput "MouseMove" "Off"
 If !WinWaitNotActive("PharmNet: Retail", ,3)											    ; Wait up to 3 seconds to check if window doesn't change (i.e. patient loading)
 	{
     A_Clipboard := ID
-    MsgBox Format("Hotkey appears to have failed, but {1} is copied. Try to paste into MMR search field or running hotkey again. Sorry about that.", ID)
+    MsgBox Format("Hotkey appears to have failed, but {1} is copied. Try to paste into MMR search field or running hotkey again. Sorry about that.", ID),,"T5"
 	}
 Exit
 }
