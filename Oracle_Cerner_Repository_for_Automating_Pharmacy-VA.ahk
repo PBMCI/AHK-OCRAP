@@ -5,6 +5,7 @@ Stores scripted hotkeys to be used for automating processes in Oracle Cerner pha
 Contact: Lewis DeJaegher (lewis.dejaegher@va.gov)
 Additional documentation: https://dvagov.sharepoint.com/:u:/r/sites/PharmacyCernerEHRCommunityofPractice/Shared%20Documents/Outpatient%20Prescribing%20and%20Dispensing/AutoHotKey%20Automating%20Pharmacy/How%20to%20Guide%20for%20OCRAP-VA.url?csf=1&web=1&e=QdVDxB (alt+shift+h)
 Change Log:
+    2023/10/24 - Added fix for inactive meds (KeyWait), added alt+left click to OK button on new orders
     2023/10/19 - Added GUI to Alt+Shift+F to allow user to limit script to specific items and receive input. Added CheckHP function to evaluate and remove DoD HPs; added Alt+O hotkey to use that function and incorporated into Alt+Shift+F
     2023/10/10 - Added IP/Med Manager lookup from PC patient (click encounter) or patient list (click row). Added logic to look for "open" (no patient) MMR and handling for when it appears ctrl+p failed to clear prior patient (e.g. open History window, unsubmitted actions). Started replacing unnecessary variables (e.g. used once) with hard coded values to simplify code.
         - Ronnie Major developed launcher/updater file and iconography
@@ -249,7 +250,7 @@ GUIFail(*)
 	FileMenu := Menu()
 	FileMenu.Add "E&xit", call_reload														; Function call will reload script, hiding GUI
 	HelpMenu := Menu()
-	HelpMenu.Add "&About", (*) => Run("https://dvagov.sharepoint.com/sites/PharmacyCernerEHRCommunityofPractice/SitePages/Oracle-Cerner-Repository-for-Automating-Pharmacy-VA.aspx#alt%2Bshift%2Bf-failure-resolution")
+	HelpMenu.Add "&About", (*) => Run("https://dvagov.sharepoint.com/sites/PharmacyCernerEHRCommunityofPractice/SitePages/Oracle-Cerner-Repository-for-Automating-Pharmacy-VA.aspx?csf=1&web=1&e=n4xVU9&siteid=%7B0D555D22-714A-473B-B971-CDE4D9CE013F%7D&webid=%7B643266C2-271B-46E0-A96F-2FA1068C485C%7D&uniqueid=%7B2B6C0596-0A5D-41BF-BEC7-A1EE0293F2D3%7D#use-a-specific-view")
 	Menus := MenuBar()
 	Menus.Add "&File", FileMenu  ; Attach the two submenus that were created above.
 	Menus.Add "&Help", HelpMenu
@@ -527,6 +528,8 @@ SetTitleMatchMode 2 	                                                           
 ID := ""                                                                                    ; Variable to store ID value (PC = MRN or FIN; DM, CM, WQM = Rx#)
 Term := ""                                                                                  ; Variable to store the search term type
 
+MouseGetPos &xPosMouse, &yPosMouse                                                          ; Record current mouse position
+
 BlockInput "On"                                                                             ; Block keyboard while executing
 BlockInput "MouseMove"                                                                      ; Block mouse movement while executing
 
@@ -615,7 +618,7 @@ Else if WinActive("PharmNet: Claims Monitor")                                   
 Else if WinActive("- PharmNet: Retail Med")                                                 ; Called in MMR with patient loaded so we're going to add inactive orders
     {
     WinActivate("- PharmNet: Retail Med")
-    MouseGetPos &xpos, &ypos                                                                ; Grab mouse position so we can place back later
+    KeyWait "Alt"                                                                           ; Alt button from hotkey trigger must be released for this to work
     Send "!v"                                                                               ; Alt+V to open View menu
     Send "{Enter}"                                                                          ; Enter to select first option (Inactive Orders)
     If WinWaitActive("View Profile by Status",,0.5)                                         ; If adding, View Profile by Status should appear
@@ -624,7 +627,25 @@ Else if WinActive("- PharmNet: Retail Med")                                     
         WinWaitActive("- PharmNet: Retail Med",,1)
         MouseClick "left", 1100, 220, 1, 0                                                  ; Click where we think the Order Sentence column header may exist (will vary)
         }
-    MouseMove xpos, ypos, 0                                                                 ; Put the mouse back where it was
+    MouseMove xPosMouse, yPosMouse, 0                                                       ; Put the mouse back where it was
+    BlockInput "Off"                                                                        ; Release blocks and exit
+    BlockInput "MouseMove" "Off"
+    Exit
+    }
+
+Else if WinActive("ahk_group HP") and xPosMouse > 646 and yPosMouse > 740 and xPosMouse < 748 and yPosMouse < 765
+    {
+    CheckHP()
+    MouseClick "left", xPosMouse, yPosMouse, 1
+    BlockInput "Off"                                                                        ; Release blocks and exit
+    BlockInput "MouseMove" "Off"
+    Exit
+    }
+
+Else if WinActive("Bill Only for Patient") and xPosMouse > 657 and yPosMouse > 779 and xPosMouse < 747 and yPosMouse < 803
+    {
+    CheckHP()
+    MouseClick "left", xPosMouse, yPosMouse, 1
     BlockInput "Off"                                                                        ; Release blocks and exit
     BlockInput "MouseMove" "Off"
     Exit
