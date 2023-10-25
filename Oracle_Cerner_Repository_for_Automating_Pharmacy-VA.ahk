@@ -5,7 +5,7 @@ Stores scripted hotkeys to be used for automating processes in Oracle Cerner pha
 Contact: Lewis DeJaegher (lewis.dejaegher@va.gov)
 Additional documentation: https://dvagov.sharepoint.com/:u:/r/sites/PharmacyCernerEHRCommunityofPractice/Shared%20Documents/Outpatient%20Prescribing%20and%20Dispensing/AutoHotKey%20Automating%20Pharmacy/How%20to%20Guide%20for%20OCRAP-VA.url?csf=1&web=1&e=QdVDxB (alt+shift+h)
 Change Log:
-    2023/10/24 - Added fix for inactive meds (KeyWait), added alt+left click to OK button on new orders
+    2023/10/24 - Added fix for inactive meds (KeyWait), added alt+left click to OK button on new orders; modified MMR window handling logic
     2023/10/19 - Added GUI to Alt+Shift+F to allow user to limit script to specific items and receive input. Added CheckHP function to evaluate and remove DoD HPs; added Alt+O hotkey to use that function and incorporated into Alt+Shift+F
     2023/10/10 - Added IP/Med Manager lookup from PC patient (click encounter) or patient list (click row). Added logic to look for "open" (no patient) MMR and handling for when it appears ctrl+p failed to clear prior patient (e.g. open History window, unsubmitted actions). Started replacing unnecessary variables (e.g. used once) with hard coded values to simplify code.
         - Ronnie Major developed launcher/updater file and iconography
@@ -880,8 +880,13 @@ SetTitleMatchMode 1																		    ; Title must begin with- changed to dif
 Sleep 250
 MouseClick "left", 63, 172, 1                                                               ; Placing cursor because ctrl+p doesn't work if no patient is selected and user has clicked out of search box
 Send "^p"                                                                                   ; And sending ctrl+p because it seems to work most reliably to do both
-Sleep 500                                                                                   ; System lag
-If !WinActive("PharmNet: Retail Med")                                                       ; If ctrl+p did not result in WinTitle("A") beginning with PharmNet, a window may be open
+
+Loop 8                                                                                      ; After ctrl+p, WinTitle will change, but when is variable so check a few times
+    {
+    Sleep 250
+    } until WinActive("PharmNet: Retail Med")
+
+If !WinActive("PharmNet: Retail Med")                                                       ; If ctrl+p did not result in WinTitle("A") beginning with PharmNet, a window may be open in MMR
     {
     BlockInput "Off"
     BlockInput "MouseMove" "Off"
