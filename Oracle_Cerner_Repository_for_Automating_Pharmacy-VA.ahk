@@ -5,12 +5,13 @@ Stores scripted hotkeys to be used for automating processes in Oracle Cerner pha
 Contact: Lewis DeJaegher (lewis.dejaegher@va.gov)
 Additional documentation: https://dvagov.sharepoint.com/:u:/r/sites/PharmacyCernerEHRCommunityofPractice/Shared%20Documents/Outpatient%20Prescribing%20and%20Dispensing/AutoHotKey%20Automating%20Pharmacy/How%20to%20Guide%20for%20OCRAP-VA.url?csf=1&web=1&e=QdVDxB (alt+shift+h)
 Change Log:
-    2023/10/24 - Added fix for inactive meds (KeyWait), added alt+left click to OK button on new orders; modified MMR window handling logic
+    2023/11/01 - Added fix for inactive meds (KeyWait); adjusted CheckHP to differentiate Bill Only (MMR) v. "Bill Only" (resuspend/WQM); created function PharmacyPatientLookup(ID,Term) and incorporated into alt+LC
+    2023/10/24 - Added alt+left click to OK button on new orders + refills; modified MMR window handling logic
     2023/10/19 - Added GUI to Alt+Shift+F to allow user to limit script to specific items and receive input. Added CheckHP function to evaluate and remove DoD HPs; added Alt+O hotkey to use that function and incorporated into Alt+Shift+F
     2023/10/10 - Added IP/Med Manager lookup from PC patient (click encounter) or patient list (click row). Added logic to look for "open" (no patient) MMR and handling for when it appears ctrl+p failed to clear prior patient (e.g. open History window, unsubmitted actions). Started replacing unnecessary variables (e.g. used once) with hard coded values to simplify code.
         - Ronnie Major developed launcher/updater file and iconography
-    2023/10/04 - Added CMOP product line search; modified Outlook message to not restrict to HTML messages; updated MMR lookup for PC and DM to use WinClose; added MRN lookup from PBI report; applied fix to Alt+LClick to properly remove inactive meds if previously added
-    2023/09/28 - Added tracking search and MMR search from message center in PC. Updated help to load SPO reference page, and exit hotkey to initiate email for reporting. Added block release where previously omitted. Updated message when MMR lookup fails to include copied value and clarify message.
+    2023/10/04 - Added CMOP product line search; modified Outlook message to not restrict to HTML messages; updated MMR lookup for PC and DM to use WinClose instead of alt+c to avoid conflict with CPRSBooster; added MRN lookup from PBI report; applied fix to Alt+LClick to properly remove inactive meds if previously added
+    2023/09/28 - Added package tracking search and MMR search from message center in PC. Updated help to load SPO reference page and exit hotkey to initiate email for reporting. Added block release where previously omitted. Updated message when MMR lookup fails to include copied value and clarify message.
     2023/09/15 - Applied fixes to infinite loop and failure to sort with Alt+LC (inactive meds), routing option change in Alt+Shift+F. Added alt+LC MMR lookup from V20 OP Dashboard.
     2023/08/31 - Added MMR search from Teams/Excel/Outlook, other Cerner window maximization to alt+left click; updated input block on unclaim; updated WinMatch to release blocks prior to exit; modified Exit hotkey to exit better; updated comments/descriptions
 	2023/08/09 - Added MMR patient search/inactive meds hotkey; modified failure hotkey to allow user input; modified WinMatch to include time parameter (delay) and inserted into unclaim script
@@ -84,6 +85,8 @@ WinMatch(Expected, Delay)
 ; This is a function that may be used in hotkey to remove DoD health plans during script processing to avoid unnecessary claim workload
 ; Script checks initial HP, then uses down key to check next HP listed. If only DoD HP is available, the DoD HP will be removed.
 ; Function expected to only be called when a [New Order/Refill/Bill Only/Modify] for Patient: [Patient Name]  [DOB: ] is open
+;   NOTE: "Bill Only" window varies in size depending on if true bill only (MMR) or pseudo-bill only (resuspend in WQM) and also varies from other action windows
+;   May consider adding a parameter or resorting to checking both locations but for now will assume Alt+Shift+F is how this will be used in WQM, and independent call will be from MMR
 ;   Similarly titled windows may exist (e.g. Inquire for Patient Name:) so attention to window title/context is necessary when using this function
 ****************************************************************************************************************************************************/
 
@@ -91,9 +94,13 @@ CheckHP()
 {
 WinActivate("for Patient:")
 HP := "empty"
-If WinActive("Bill Only")																	; Bill only window is larger 2/2 row of checkboxes above routing option
+If WinActive("Bill Only") and PixelGetColor(27,480) = 0xFFFFFF							    ; Bill only window size varies between resuspend (WQM) and bill only (MMR) but cannot distinguish by title
 	{
-	MouseClick "left", 27, 540, 1, 0		
+	MouseClick "left", 27, 480, 1, 0                                                        ; Health Plan is at 480 via MMR; 480 is F0F0F0 via WQM (background)                                                    
+	}
+Else if WinActive("Bill Only")											                
+	{
+	MouseClick "left", 27, 540, 1, 0
 	}
 Else
 	{	
@@ -125,6 +132,101 @@ Loop 5																						; This is to prevent an infinite loop should logic f
 Return
 }
 
+/************************************************************ PharmacyPatientLookup function ********************************************************
+; This is a function that may be used in hotkey to search for a patient in MMR or Med Manager using identifier passed to function
+; This is used in Alt+Left Click to load patient profile
+; Potential other uses exists that would build on the initial search - e.g. load patient by MRN, find rx for drug, do something with rx
+; Find rx on amb profile may be a more straightforward approach in most cases
+****************************************************************************************************************************************************/
+
+PharmacyPatientLookup(ID,Term){
+If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                                       ; Check that ID has only numeric characters (after removing potential hyphen) and is not empty
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    MsgBox "Copied value is invalid or copy failed. Please try again.",,"T5"
+    Exit
+    }
+
+If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                                      ; Term is FIN and an open MM is available
+    {
+    WinActivate("PharmNet: Pharmacy Med")                                                   ; Activate MMR
+    Sleep 250
+    Send "!i"                                                                               ; Navigate to change the search term
+    Send "{Enter}"                                                                          ; Trigger drop down
+    Send "{Down}"
+    Send "{Enter}"                                                                          ; Select term
+    Sleep 250                                                                               
+    MouseClick "left", 67,173, 1                                                            ; If user clicks in side bar, cursor won't exist in search field
+    Send ID                                                                                 ; Send value
+    Send "{Enter}"                                                                          ; Initiate search
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    If !WinWaitNotActive("Pharmacy Medication", ,5)											; Wait up to 5 seconds to check if window doesn't change (i.e. patient loading)
+        {
+        A_Clipboard := ID
+        MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID),,"T5"
+        }
+    Exit
+    }
+Else if Term = "FIN"
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"    
+    MsgBox Format("Unable to find open Med Manager without a patient loaded. FIN: {1} is copied, please search manually. Thanks!", ID),,"T5"
+    Exit
+    }
+
+If !WinExist("PharmNet: Retail Med")                                                        ; If no MMR is open, remove blocks and exit; window name is possibly truncated when a patient is already loaded
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    Exit
+    }
+Else if WinExist("PharmNet: Retail Med", ,",")                                              ; Check for MMR w/o loaded patient (assume patient name has comma; could move STMM = 1 up)
+    {
+    WinActivate("PharmNet: Retail Med", ,",")                                               ; Activate MMR
+    }
+Else WinActivateBottom("PharmNet: Retail Med")                                              ; If user has multiple windows open, grab the window idle longest
+
+WinWaitActive("PharmNet: Retail Med")
+SetTitleMatchMode 1																		    ; Title must begin with- changed to differentiate MMR that has patient loaded v. not
+Sleep 250
+MouseClick "left", 63, 172, 1                                                               ; Placing cursor because ctrl+p doesn't work if no patient is selected and user has clicked out of search box
+Send "^p"                                                                                   ; And sending ctrl+p because it seems to work most reliably to do both
+
+Loop 8                                                                                      ; After ctrl+p, WinTitle will change, but when is variable so check a few times
+    {
+    Sleep 250
+    } until WinActive("PharmNet: Retail Med")
+
+If !WinActive("PharmNet: Retail Med")                                                       ; If ctrl+p did not result in WinTitle("A") beginning with PharmNet, a window may be open in MMR
+    {
+    BlockInput "Off"
+    BlockInput "MouseMove" "Off"
+    MsgBox Format("MMR may not be available for search. Please check for an open window or warning. {1}: {2} is copied, please complete search manually when ready. Thanks!", Term, ID), ,"4096 T5"
+    Exit
+    }
+Send "{Tab}"                                                                                ; Navigate to change the search term
+Send "{Enter}"                                                                              ; Trigger drop down
+If Term = "MRN"                                                                             
+    {
+    Send "{Down 3}"                                                                         ; 3rd value in list
+    Send "{Enter}" 
+    Sleep 500
+    }
+Else if Term = "Rx"                                                                         
+    {
+    Send "{Down 4}"                                                                         ; 4th value in list
+    Send "{Enter}"                                                                          ; Select term
+    Sleep 500                                                                               
+    Send "{Backspace 2}"                                                                    ; Clear prefix
+    }
+Send ID                                                                                     ; Send value
+Send "{Enter}"                                                                              ; Initiate search
+Return
+}
+
 /************************************************************ Alt+O (OK) ***************************************************************************
 ; This hotkey will check for presence of a DoD HP and attempt to remove or replace using CheckHP() function above. 
 ; NOTE: Scripts that include "!o" at these two windows may be adversely impacted. Additional controls and/or modification of (#)HotIf logic may be necessary. https://www.autohotkey.com/docs/v2/lib/_HotIf.htm
@@ -136,6 +238,7 @@ Return
 
 GroupAdd "HP", "Refill for Patient:"
 GroupAdd "HP", "New Order for Patient:"
+GroupAdd "HP", "Bill Only for Patient:"
 
 #HotIf WinActive("ahk_group HP")															; #HotIf does not prevent other hotkeys from calling this hotkey
 !o::
@@ -633,7 +736,11 @@ Else if WinActive("- PharmNet: Retail Med")                                     
     Exit
     }
 
-Else if WinActive("ahk_group HP") and xPosMouse > 646 and yPosMouse > 740 and xPosMouse < 748 and yPosMouse < 765
+/* Bill Only (MMR) and "Bill Only" (resuspend in WQM) are not the same size; do Bill Only window first since Bill Only is in ahk_group HP */
+
+Else if WinActive("Bill Only for Patient") and xPosMouse > 657 and xPosMouse < 748 
+    and (yPosMouse > 716 and yPosMouse < 740
+    or yPosMouse > 779 and yPosMouse < 804)
     {
     CheckHP()
     MouseClick "left", xPosMouse, yPosMouse, 1
@@ -642,7 +749,7 @@ Else if WinActive("ahk_group HP") and xPosMouse > 646 and yPosMouse > 740 and xP
     Exit
     }
 
-Else if WinActive("Bill Only for Patient") and xPosMouse > 657 and yPosMouse > 779 and xPosMouse < 747 and yPosMouse < 803
+Else if WinActive("ahk_group HP") and xPosMouse > 646 and xPosMouse < 748 and yPosMouse > 740 and yPosMouse < 765
     {
     CheckHP()
     MouseClick "left", xPosMouse, yPosMouse, 1
@@ -824,92 +931,8 @@ Else                                                                            
     Exit
     }
 
-If RegExMatch(StrReplace(ID,"-"),"\D") = 1 OR ID = ""                                       ; Check that ID has only numeric characters (after removing potential hyphen) and is not empty
-    {
-    BlockInput "Off"
-    BlockInput "MouseMove" "Off"
-    MsgBox "Copied value is invalid or copy failed. Please try again.",,"T5"
-    Exit
-    }
+PharmacyPatientLookup(ID,Term)                                                              ; Extracted code as standalone function, replaced here 11/01/2023
 
-If Term = "FIN" AND WinExist("PharmNet: Pharmacy Med")                                      ; Term is FIN and an open MM is available
-    {
-    WinActivate("PharmNet: Pharmacy Med")                                                   ; Activate MMR
-;    WinWaitActive("PharmNet: Pharmacy Med")                                                 ; Wait until active (redundant)
-    Sleep 250
-    Send "!i"                                                                               ; Navigate to change the search term
-    Send "{Enter}"                                                                          ; Trigger drop down
-    Send "{Down}"
-    Send "{Enter}"                                                                          ; Select term
-    Sleep 250                                                                               
-    MouseClick "left", 67,173, 1                                                            ; If user clicks in side bar, cursor won't exist in search field
-    Send ID                                                                                 ; Send value
-    Send "{Enter}"                                                                          ; Initiate search
-    BlockInput "Off"
-    BlockInput "MouseMove" "Off"
-    If !WinWaitNotActive("Pharmacy Medication", ,5)											; Wait up to 5 seconds to check if window doesn't change (i.e. patient loading)
-        {
-        A_Clipboard := ID
-        MsgBox Format("Hotkey appears to have failed, but FIN: {1} is copied. Try to paste into Med Manager search field or running hotkey again. Sorry about that.", ID),,"T5"
-        }
-    Exit
-    }
-Else if Term = "FIN"
-    {
-    BlockInput "Off"
-    BlockInput "MouseMove" "Off"    
-    MsgBox Format("Unable to find open Med Manager without a patient loaded. FIN: {1} is copied, please search manually. Thanks!", ID),,"T5"
-    Exit
-    }
-
-If !WinExist("PharmNet: Retail Med")                                                        ; If no MMR is open, remove blocks and exit; window name is possibly truncated when a patient is already loaded
-    {
-    BlockInput "Off"
-    BlockInput "MouseMove" "Off"
-    Exit
-    }
-Else if WinExist("PharmNet: Retail Med", ,",")                                              ; Check for MMR w/o loaded patient (assume patient name has comma; could move STMM = 1 up)
-    {
-    WinActivate("PharmNet: Retail Med", ,",")                                               ; Activate MMR
-;    WinWaitActive("PharmNet: Retail Med", ,",")                                            ; Wait until active (redundant)
-    }
-Else WinActivateBottom("PharmNet: Retail Med")                                              ; If user has multiple windows open, grab the window idle longest
-
-WinWaitActive("PharmNet: Retail Med")
-SetTitleMatchMode 1																		    ; Title must begin with- changed to differentiate MMR that has patient loaded v. not
-Sleep 250
-MouseClick "left", 63, 172, 1                                                               ; Placing cursor because ctrl+p doesn't work if no patient is selected and user has clicked out of search box
-Send "^p"                                                                                   ; And sending ctrl+p because it seems to work most reliably to do both
-
-Loop 8                                                                                      ; After ctrl+p, WinTitle will change, but when is variable so check a few times
-    {
-    Sleep 250
-    } until WinActive("PharmNet: Retail Med")
-
-If !WinActive("PharmNet: Retail Med")                                                       ; If ctrl+p did not result in WinTitle("A") beginning with PharmNet, a window may be open in MMR
-    {
-    BlockInput "Off"
-    BlockInput "MouseMove" "Off"
-    MsgBox Format("MMR may not be available for search. Please check for an open window or warning. {1}: {2} is copied, please complete search manually when ready. Thanks!", Term, ID), ,"4096 T5"
-    Exit
-    }
-Send "{Tab}"                                                                                ; Navigate to change the search term
-Send "{Enter}"                                                                              ; Trigger drop down
-If Term = "MRN"                                                                             
-    {
-    Send "{Down 3}"                                                                         ; 3rd value in list
-    Send "{Enter}" 
-    Sleep 500
-    }
-Else if Term = "Rx"                                                                         
-    {
-    Send "{Down 4}"                                                                         ; 4th value in list
-    Send "{Enter}"                                                                          ; Select term
-    Sleep 500                                                                               
-    Send "{Backspace 2}"                                                                    ; Clear prefix
-    }
-Send ID                                                                                     ; Send value
-Send "{Enter}"                                                                              ; Initiate search
 BlockInput "Off"
 BlockInput "MouseMove" "Off"
 If !WinWaitNotActive("PharmNet: Retail", ,3)											    ; Wait up to 3 seconds to check if window doesn't change (i.e. patient loading)
