@@ -728,7 +728,7 @@ Else if WinActive("- PharmNet: Retail Med")                                     
         {                                                                          
         Send "!o"                                                                           ; OK to close window
         WinWaitActive("- PharmNet: Retail Med",,1)
-        MouseClick "left", 1100, 220, 1, 0                                                  ; Click where we think the Order Sentence column header may exist (will vary)
+        MouseClick "left", 1100, 220, 1                                                     ; Click where we think the Order Sentence column header may exist (will vary)
         }
     MouseMove xPosMouse, yPosMouse, 0                                                       ; Put the mouse back where it was
     BlockInput "Off"                                                                        ; Release blocks and exit
